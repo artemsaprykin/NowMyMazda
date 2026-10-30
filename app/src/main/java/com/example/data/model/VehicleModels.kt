@@ -99,6 +99,28 @@ data class CloudApiConfig(
     val isSyncing: Boolean = false
 )
 
+data class ActiveDriveSession(
+    val startTimeMillis: Long = System.currentTimeMillis(),
+    val startAddress: String = "Home Garage, Seattle",
+    val destinationAddress: String = "Bellevue Tech Center, WA",
+    val currentDistanceMiles: Double = 0.0,
+    val durationSeconds: Int = 0,
+    val currentSpeedMph: Double = 0.0,
+    val maxSpeedMph: Double = 0.0,
+    val instantMpg: Double = 28.5,
+    val currentStepIndex: Int = 0,
+    val currentRouteLeg: String = "Departing origin",
+    val routeLegs: List<String> = listOf(
+        "Departing origin",
+        "Merging onto Interstate 5",
+        "Express lanes cruising",
+        "Exit 14 toward Bellevue Way",
+        "Arriving at destination"
+    ),
+    val drivingScore: Int = 95,
+    val tripTag: String = "Commute"
+)
+
 data class VehicleState(
     val vin: String = "JM3KFBDM9P0128934",
     val modelName: String = "Mazda CX-50 Turbo AWD",
@@ -118,5 +140,6 @@ data class VehicleState(
     val remoteStart: RemoteStartSettings = RemoteStartSettings(),
     val location: VehicleGpsLocation = VehicleGpsLocation(),
     val geofence: GeofenceSettings = GeofenceSettings(),
-    val cloudConfig: CloudApiConfig = CloudApiConfig()
+    val cloudConfig: CloudApiConfig = CloudApiConfig(),
+    val activeDriveSession: ActiveDriveSession? = null
 )

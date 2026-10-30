@@ -238,6 +238,18 @@ fun DashboardScreen(
             )
         }
 
+        // Active Drive Telemetry Banner if driving
+        item {
+            AnimatedVisibility(visible = vehicleState.activeDriveSession != null) {
+                vehicleState.activeDriveSession?.let { session ->
+                    com.example.ui.components.ActiveDriveCard(
+                        session = session,
+                        onStopDrive = onEngineStop
+                    )
+                }
+            }
+        }
+
         // Remote Controls Grid
         item {
             Text(

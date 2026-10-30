@@ -14,8 +14,12 @@ data class TripLogEntity(
     val durationMinutes: Int,
     val avgMpg: Double,
     val avgSpeedMph: Double,
-    val drivingScore: Int, // i-DM driving score 0-100
+    val maxSpeedMph: Double = 65.0,
+    val drivingScore: Int, // Mazda i-DM score 0-100
     val startAddress: String,
     val endAddress: String,
+    val routeSummary: String = "Direct Highway & Arterial Route",
+    val waypointsJson: String = "", // JSON list of route waypoints
+    val fuelConsumedGal: Double = 0.8,
     val tripTag: String = "Commute"
 )

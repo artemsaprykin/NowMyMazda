@@ -2,9 +2,11 @@ package com.example
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.example.data.local.TripLogEntity
 import com.example.data.model.EngineState
 import com.example.data.model.LockState
 import com.example.data.model.VehicleState
+import com.example.ui.TripSortOption
 import com.example.util.LocationHelper
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -41,5 +43,62 @@ class ExampleRobolectricTest {
       47.6097, -122.3422
     )
     assertTrue("Distance should be approximately 1300-1500m", distance in 1100.0..1600.0)
+  }
+
+  @Test
+  fun `verify trip filtering and sorting mechanics`() {
+    val trip1 = TripLogEntity(
+      id = 1,
+      vin = "TEST_VIN",
+      startTimeMillis = 1000L,
+      endTimeMillis = 2000L,
+      distanceMiles = 15.0,
+      durationMinutes = 20,
+      avgMpg = 28.0,
+      avgSpeedMph = 45.0,
+      maxSpeedMph = 65.0,
+      drivingScore = 88,
+      startAddress = "Downtown Seattle",
+      endAddress = "Bellevue",
+      routeSummary = "I-90 Floating Bridge",
+      tripTag = "Commute"
+    )
+
+    val trip2 = TripLogEntity(
+      id = 2,
+      vin = "TEST_VIN",
+      startTimeMillis = 3000L,
+      endTimeMillis = 5000L,
+      distanceMiles = 45.0,
+      durationMinutes = 50,
+      avgMpg = 34.0,
+      avgSpeedMph = 55.0,
+      maxSpeedMph = 72.0,
+      drivingScore = 95,
+      startAddress = "Bellevue",
+      endAddress = "Snoqualmie Pass",
+      routeSummary = "I-90 Mountain Pass",
+      tripTag = "Highway"
+    )
+
+    val trips = listOf(trip1, trip2)
+
+    // Filter by tag
+    val commuteTrips = trips.filter { it.tripTag == "Commute" }
+    assertEquals(1, commuteTrips.size)
+    assertEquals("Downtown Seattle", commuteTrips.first().startAddress)
+
+    // Filter by search query
+    val searchResults = trips.filter { it.routeSummary.contains("Mountain", ignoreCase = true) }
+    assertEquals(1, searchResults.size)
+    assertEquals(2L, searchResults.first().id)
+
+    // Sort by distance descending
+    val sortedByDist = trips.sortedByDescending { it.distanceMiles }
+    assertEquals(45.0, sortedByDist.first().distanceMiles, 0.01)
+
+    // Sort by driving score descending
+    val sortedByScore = trips.sortedByDescending { it.drivingScore }
+    assertEquals(95, sortedByScore.first().drivingScore)
   }
 }

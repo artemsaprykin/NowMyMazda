@@ -93,7 +93,10 @@ fun MainAppScreen(
     viewModel: VehicleViewModel = viewModel()
 ) {
     val vehicleState by viewModel.vehicleState.collectAsStateWithLifecycle()
-    val tripLogs by viewModel.tripLogs.collectAsStateWithLifecycle()
+    val filteredTrips by viewModel.filteredAndSortedTrips.collectAsStateWithLifecycle()
+    val tripSearchQuery by viewModel.tripSearchQuery.collectAsStateWithLifecycle()
+    val selectedTagFilter by viewModel.selectedTripTagFilter.collectAsStateWithLifecycle()
+    val selectedSort by viewModel.selectedSortOrder.collectAsStateWithLifecycle()
     val maintenanceReminders by viewModel.maintenanceReminders.collectAsStateWithLifecycle()
     val currentTab by viewModel.currentTab.collectAsStateWithLifecycle()
     val securityConfig by viewModel.securityConfig.collectAsStateWithLifecycle()
@@ -340,10 +343,20 @@ fun MainAppScreen(
                 )
 
                 VehicleNavTab.TRIPS -> TripLogScreen(
-                    trips = tripLogs,
+                    vehicleState = vehicleState,
+                    trips = filteredTrips,
+                    searchQuery = tripSearchQuery,
+                    onSearchQueryChange = { viewModel.setTripSearchQuery(it) },
+                    selectedTagFilter = selectedTagFilter,
+                    onTagFilterChange = { viewModel.setTripTagFilter(it) },
+                    selectedSort = selectedSort,
+                    onSortChange = { viewModel.setTripSortOrder(it) },
+                    onStartLiveDrive = { start, dest, tag -> viewModel.startLiveDrive(start, dest, tag) },
+                    onStopLiveDrive = { viewModel.requestStopEngine() },
                     onAddTrip = { dist, dur, mpg, start, end, tag ->
                         viewModel.addManualTrip(dist, dur, mpg, start, end, tag)
-                    }
+                    },
+                    onDeleteTrip = { tripId -> viewModel.deleteTrip(tripId) }
                 )
 
                 VehicleNavTab.SETTINGS -> SettingsScreen(

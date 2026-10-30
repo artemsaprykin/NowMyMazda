@@ -64,9 +64,12 @@ class VehicleRepository(
                     durationMinutes = 38,
                     avgMpg = 29.4,
                     avgSpeedMph = 42.0,
+                    maxSpeedMph = 68.0,
                     drivingScore = 94,
                     startAddress = "Home Garage, Seattle",
                     endAddress = "Kirkland Tech Campus, WA",
+                    routeSummary = "WA-520 E Floating Bridge & Lake Washington Blvd",
+                    fuelConsumedGal = 0.84,
                     tripTag = "Commute"
                 )
             )
@@ -79,9 +82,12 @@ class VehicleRepository(
                     durationMinutes = 72,
                     avgMpg = 32.1,
                     avgSpeedMph = 58.5,
+                    maxSpeedMph = 74.0,
                     drivingScore = 91,
                     startAddress = "Seattle Downtown",
-                    endAddress = "Snoqualmie Pass, WA",
+                    endAddress = "Snoqualmie Pass Summit, WA",
+                    routeSummary = "I-90 E Mountain Corridor via Issaquah & North Bend",
+                    fuelConsumedGal = 2.12,
                     tripTag = "Highway"
                 )
             )
@@ -94,9 +100,12 @@ class VehicleRepository(
                     durationMinutes = 22,
                     avgMpg = 24.6,
                     avgSpeedMph = 23.0,
+                    maxSpeedMph = 38.0,
                     drivingScore = 88,
                     startAddress = "Home Garage, Seattle",
                     endAddress = "Trader Joe's, Queen Anne",
+                    routeSummary = "Elliott Ave & W Mercer St City Route",
+                    fuelConsumedGal = 0.34,
                     tripTag = "City"
                 )
             )
@@ -231,16 +240,146 @@ class VehicleRepository(
         }
     }
 
+    private var activeDriveJob: Job? = null
+
+    fun startLiveDrive(
+        startAddress: String = "Home Garage, Seattle",
+        destinationAddress: String = "Bellevue Way & 8th St, WA",
+        tag: String = "Commute"
+    ) {
+        activeDriveJob?.cancel()
+        val session = com.example.data.model.ActiveDriveSession(
+            startTimeMillis = System.currentTimeMillis(),
+            startAddress = startAddress,
+            destinationAddress = destinationAddress,
+            currentDistanceMiles = 0.0,
+            durationSeconds = 0,
+            currentSpeedMph = 18.0,
+            maxSpeedMph = 18.0,
+            instantMpg = 28.2,
+            tripTag = tag
+        )
+
+        _vehicleState.value = _vehicleState.value.copy(
+            engineState = EngineState.RUNNING,
+            lockState = LockState.LOCKED, // Auto door lock when driving starts
+            activeDriveSession = session,
+            batteryHealth = _vehicleState.value.batteryHealth.copy(
+                voltage = 14.2,
+                alternatorStatus = "14.2V (Alternator Active)"
+            )
+        )
+
+        NotificationHelper.sendAlert(
+            context,
+            201,
+            "Automatic Trip Recording Started",
+            "Ignition ON: Logging journey from $startAddress to $destinationAddress.",
+            isUrgent = false
+        )
+
+        activeDriveJob = scope.launch {
+            var seconds = 0
+            var dist = 0.0
+            var maxSpeed = 18.0
+            val speeds = listOf(22.0, 35.0, 48.0, 58.0, 64.0, 62.0, 45.0, 30.0)
+            val legs = session.routeLegs
+
+            while (_vehicleState.value.engineState == EngineState.RUNNING &&
+                _vehicleState.value.activeDriveSession != null
+            ) {
+                delay(1000)
+                seconds++
+                val speedIdx = (seconds / 3) % speeds.size
+                val currentSpeed = speeds[speedIdx]
+                if (currentSpeed > maxSpeed) maxSpeed = currentSpeed
+                // Real-time incremental distance (scaled slightly for interactive demonstration)
+                val deltaMiles = (currentSpeed / 3600.0) * 1.8
+                dist += deltaMiles
+
+                val legIdx = ((seconds / 8) % legs.size).coerceAtMost(legs.size - 1)
+                val currentLeg = legs[legIdx]
+
+                val instantEconomy = 27.0 + (if (currentSpeed > 50) 4.5 else -2.0) + (Math.sin(seconds.toDouble()) * 1.5)
+
+                val updatedSession = _vehicleState.value.activeDriveSession?.copy(
+                    durationSeconds = seconds,
+                    currentDistanceMiles = Math.round(dist * 100.0) / 100.0,
+                    currentSpeedMph = currentSpeed,
+                    maxSpeedMph = maxSpeed,
+                    instantMpg = Math.round(instantEconomy * 10.0) / 10.0,
+                    currentStepIndex = legIdx,
+                    currentRouteLeg = currentLeg
+                )
+
+                _vehicleState.value = _vehicleState.value.copy(
+                    activeDriveSession = updatedSession,
+                    odometerMiles = _vehicleState.value.odometerMiles + if (seconds % 10 == 0) 1 else 0
+                )
+            }
+        }
+    }
+
     fun stopEngine() {
         remoteStartTimerJob?.cancel()
+        activeDriveJob?.cancel()
+
+        val session = _vehicleState.value.activeDriveSession
+        if (session != null && session.currentDistanceMiles > 0.05) {
+            // Automatically finalize and save trip to Room Database
+            val now = System.currentTimeMillis()
+            val durationMinutes = Math.max(1, session.durationSeconds / 60)
+            val avgSpeed = (session.currentDistanceMiles / (durationMinutes / 60.0)).coerceIn(15.0, 75.0)
+            val avgEconomy = session.instantMpg.coerceIn(18.0, 38.0)
+            val fuelConsumed = Math.round((session.currentDistanceMiles / avgEconomy) * 100.0) / 100.0
+
+            scope.launch {
+                tripDao.insertTrip(
+                    TripLogEntity(
+                        vin = _vehicleState.value.vin,
+                        startTimeMillis = session.startTimeMillis,
+                        endTimeMillis = now,
+                        distanceMiles = session.currentDistanceMiles,
+                        durationMinutes = durationMinutes,
+                        avgMpg = avgEconomy,
+                        avgSpeedMph = Math.round(avgSpeed * 10.0) / 10.0,
+                        maxSpeedMph = Math.round(session.maxSpeedMph * 10.0) / 10.0,
+                        drivingScore = session.drivingScore,
+                        startAddress = session.startAddress,
+                        endAddress = session.destinationAddress,
+                        routeSummary = "${session.routeLegs.firstOrNull()} → ${session.routeLegs.lastOrNull()} via Arterial Corridor",
+                        fuelConsumedGal = fuelConsumed,
+                        tripTag = session.tripTag
+                    )
+                )
+
+                NotificationHelper.sendAlert(
+                    context,
+                    202,
+                    "Trip Automatically Logged",
+                    "${session.currentDistanceMiles} mi recorded (${durationMinutes} min). Mazda i-DM Drive Score: ${session.drivingScore}/100.",
+                    isUrgent = false
+                )
+            }
+        }
+
         _vehicleState.value = _vehicleState.value.copy(
             engineState = EngineState.OFF,
+            activeDriveSession = null,
             remoteStart = _vehicleState.value.remoteStart.copy(remainingSeconds = 0),
             batteryHealth = _vehicleState.value.batteryHealth.copy(
                 voltage = 12.6,
                 alternatorStatus = "12.6V (Resting Normal)"
             )
         )
+    }
+
+    suspend fun deleteTrip(tripId: Long) {
+        tripDao.deleteTrip(tripId)
+    }
+
+    suspend fun clearAllTrips() {
+        tripDao.clearAllTrips(_vehicleState.value.vin)
     }
 
     fun toggleDoorsLock() {

@@ -18,12 +18,23 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+import kotlinx.coroutines.flow.combine
+
 enum class VehicleNavTab {
     DASHBOARD,
     DIAGNOSTICS,
     LOCATE,
     TRIPS,
     SETTINGS
+}
+
+enum class TripSortOption(val displayName: String) {
+    NEWEST("Newest First"),
+    OLDEST("Oldest First"),
+    DISTANCE_DESC("Longest Distance"),
+    DISTANCE_ASC("Shortest Distance"),
+    MPG_DESC("Highest MPG"),
+    SCORE_DESC("Highest i-DM Score")
 }
 
 sealed class PendingSecurityAction(val title: String, val description: String) {
@@ -44,6 +55,36 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
 
     val tripLogs: StateFlow<List<TripLogEntity>> = repository.getTrips()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val tripSearchQuery = MutableStateFlow("")
+    val selectedTripTagFilter = MutableStateFlow("All")
+    val selectedSortOrder = MutableStateFlow(TripSortOption.NEWEST)
+
+    val filteredAndSortedTrips: StateFlow<List<TripLogEntity>> = combine(
+        tripLogs,
+        tripSearchQuery,
+        selectedTripTagFilter,
+        selectedSortOrder
+    ) { trips, query, tag, sort ->
+        trips.filter { trip ->
+            val matchesTag = tag == "All" || trip.tripTag.equals(tag, ignoreCase = true)
+            val matchesQuery = query.isBlank() ||
+                    trip.startAddress.contains(query, ignoreCase = true) ||
+                    trip.endAddress.contains(query, ignoreCase = true) ||
+                    trip.routeSummary.contains(query, ignoreCase = true) ||
+                    trip.tripTag.contains(query, ignoreCase = true)
+            matchesTag && matchesQuery
+        }.let { list ->
+            when (sort) {
+                TripSortOption.NEWEST -> list.sortedByDescending { it.startTimeMillis }
+                TripSortOption.OLDEST -> list.sortedBy { it.startTimeMillis }
+                TripSortOption.DISTANCE_DESC -> list.sortedByDescending { it.distanceMiles }
+                TripSortOption.DISTANCE_ASC -> list.sortedBy { it.distanceMiles }
+                TripSortOption.MPG_DESC -> list.sortedByDescending { it.avgMpg }
+                TripSortOption.SCORE_DESC -> list.sortedByDescending { it.drivingScore }
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val maintenanceReminders: StateFlow<List<MaintenanceEntity>> = repository.getMaintenanceReminders()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -219,6 +260,34 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
         }
         _pendingSecurityAction.value = null
         _biometricErrorMessage.value = null
+    }
+
+    fun setTripSearchQuery(query: String) {
+        tripSearchQuery.value = query
+    }
+
+    fun setTripTagFilter(tag: String) {
+        selectedTripTagFilter.value = tag
+    }
+
+    fun setTripSortOrder(sort: TripSortOption) {
+        selectedSortOrder.value = sort
+    }
+
+    fun startLiveDrive(start: String, dest: String, tag: String) {
+        repository.startLiveDrive(start, dest, tag)
+    }
+
+    fun deleteTrip(tripId: Long) {
+        viewModelScope.launch {
+            repository.deleteTrip(tripId)
+        }
+    }
+
+    fun clearAllTrips() {
+        viewModelScope.launch {
+            repository.clearAllTrips()
+        }
     }
 
     fun updateUserLocation(lat: Double, lng: Double) {
