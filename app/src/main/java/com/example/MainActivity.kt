@@ -66,6 +66,7 @@ import com.example.ui.screens.DiagnosticsScreen
 import com.example.ui.screens.LocateScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.TripLogScreen
+import com.example.ui.screens.VehicleConnectionScreen
 import com.example.ui.theme.AppTheme
 import com.example.ui.theme.DiagnosticGreen
 import com.example.ui.theme.MyApplicationTheme
