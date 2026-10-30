@@ -12,7 +12,7 @@ import com.example.MainActivity
 
 object NotificationHelper {
     const val CHANNEL_ID = "mazda_connected_telematics"
-    const val CHANNEL_NAME = "My Mazda Vehicle Alerts"
+    const val CHANNEL_NAME = "NowMyMazda Vehicle Alerts"
     private const val CHANNEL_DESC = "Notifications for remote commands, maintenance reminders, and security alerts."
 
     fun createNotificationChannel(context: Context) {

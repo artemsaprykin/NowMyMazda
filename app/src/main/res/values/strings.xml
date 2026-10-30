@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">My Mazda</string>
+    <string name="app_name">NowMyMazda</string>
     <string name="nav_dashboard">Dashboard</string>
     <string name="nav_diagnostics">Diagnostics</string>
     <string name="nav_location">Locate</string>

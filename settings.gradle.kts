@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "My Mazda"
+rootProject.name = "NowMyMazda"
 
 include(":app")
