@@ -70,16 +70,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.VehicleState
-import com.example.ui.theme.CabinBackground
-import com.example.ui.theme.CabinBorder
-import com.example.ui.theme.CabinSurface
-import com.example.ui.theme.CabinSurfaceElevated
+import com.example.ui.theme.AppTheme
 import com.example.ui.theme.DiagnosticAmber
 import com.example.ui.theme.DiagnosticGreen
 import com.example.ui.theme.DiagnosticRed
 import com.example.ui.theme.ElectricCyan
-import com.example.ui.theme.MetallicGray
-import com.example.ui.theme.PlatinumSilver
 import com.example.ui.theme.SoulRedDark
 import com.example.ui.theme.SoulRedLight
 import com.example.ui.theme.SoulRedPrimary
@@ -97,6 +92,7 @@ fun LocateScreen(
     modifier: Modifier = Modifier
 ) {
     var walkingGuideActive by remember { mutableStateOf(false) }
+    val colors = AppTheme.colors
 
     // Runtime permission launcher for GPS
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -145,12 +141,12 @@ fun LocateScreen(
                 text = "GPS Vehicle Locator & Geofencing",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                color = PlatinumSilver
+                color = colors.textPrimary
             )
             Text(
                 text = "Track your Mazda's location in real-time and configure anti-theft security perimeter.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MetallicGray
+                color = colors.textSecondary
             )
         }
 
@@ -186,7 +182,7 @@ fun LocateScreen(
                                 Text(
                                     text = "Vehicle exited '${vehicleState.geofence.safeZoneName}' safe zone without authorization.",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = PlatinumSilver
+                                    color = Color.White.copy(alpha = 0.85f)
                                 )
                             }
                         }
@@ -211,8 +207,8 @@ fun LocateScreen(
         item {
             Card(
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = CabinSurface),
-                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CabinBorder)),
+                colors = CardDefaults.cardColors(containerColor = colors.surface),
+                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.border)),
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("gps_map_card")
@@ -231,13 +227,13 @@ fun LocateScreen(
                                 text = "Parked Location",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = PlatinumSilver
+                                color = colors.textPrimary
                             )
                         }
 
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = CabinSurfaceElevated
+                            color = colors.surfaceElevated
                         ) {
                             Text(
                                 text = "GPS Lock Active",
@@ -253,12 +249,12 @@ fun LocateScreen(
                         text = vehicleState.location.address,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = PlatinumSilver
+                        color = colors.textPrimary
                     )
                     Text(
                         text = "Lat: ${vehicleState.location.latitude}, Lng: ${vehicleState.location.longitude}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MetallicGray,
+                        color = colors.textSecondary,
                         fontSize = 11.sp
                     )
 
@@ -370,7 +366,7 @@ fun LocateScreen(
                                 text = "Mazda CX-50",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = PlatinumSilver,
+                                color = Color(0xFFF1F5F9),
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
@@ -400,20 +396,20 @@ fun LocateScreen(
                     ) {
                         Button(
                             onClick = onFindCarFlashHorn,
-                            colors = ButtonDefaults.buttonColors(containerColor = CabinSurfaceElevated),
+                            colors = ButtonDefaults.buttonColors(containerColor = colors.surfaceElevated),
                             modifier = Modifier
                                 .weight(1f)
                                 .testTag("find_car_sound_btn")
                         ) {
                             Icon(Icons.Default.NotificationsActive, contentDescription = null, tint = SoulRedLight, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Honk & Flash", color = PlatinumSilver)
+                            Text("Honk & Flash", color = colors.textPrimary)
                         }
 
                         Button(
                             onClick = { walkingGuideActive = !walkingGuideActive },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (walkingGuideActive) SoulRedPrimary else CabinBorder
+                                containerColor = if (walkingGuideActive) SoulRedPrimary else colors.border
                             ),
                             modifier = Modifier
                                 .weight(1f)
@@ -435,7 +431,7 @@ fun LocateScreen(
                         ) {
                             Surface(
                                 shape = RoundedCornerShape(14.dp),
-                                color = CabinSurfaceElevated,
+                                color = colors.surfaceElevated,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
@@ -458,12 +454,12 @@ fun LocateScreen(
                                                 text = "Head North-East",
                                                 style = MaterialTheme.typography.titleSmall,
                                                 fontWeight = FontWeight.Bold,
-                                                color = PlatinumSilver
+                                                color = colors.textPrimary
                                             )
                                             Text(
                                                 text = "Vehicle is ~320 feet away across parking area",
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = MetallicGray
+                                                color = colors.textSecondary
                                             )
                                         }
                                     }
@@ -485,8 +481,8 @@ fun LocateScreen(
         item {
             Card(
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = CabinSurface),
-                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CabinBorder)),
+                colors = CardDefaults.cardColors(containerColor = colors.surface),
+                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.border)),
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("geofence_card")
@@ -513,12 +509,12 @@ fun LocateScreen(
                                     text = "Anti-Theft Geofence Guard",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = PlatinumSilver
+                                    color = colors.textPrimary
                                 )
                                 Text(
                                     text = if (vehicleState.geofence.isEnabled) "Perimeter armed around ${vehicleState.geofence.safeZoneName}" else "Perimeter inactive",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (vehicleState.geofence.isEnabled) DiagnosticGreen else MetallicGray
+                                    color = if (vehicleState.geofence.isEnabled) DiagnosticGreen else colors.textSecondary
                                 )
                             }
                         }
@@ -539,7 +535,7 @@ fun LocateScreen(
                     Text(
                         text = "Safety Perimeter Radius",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MetallicGray
+                        color = colors.textSecondary
                     )
                     Spacer(modifier = Modifier.height(6.dp))
 
@@ -565,14 +561,14 @@ fun LocateScreen(
 
                     Button(
                         onClick = onSetSafeZone,
-                        colors = ButtonDefaults.buttonColors(containerColor = CabinSurfaceElevated),
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.surfaceElevated),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("set_safe_zone_btn")
                     ) {
-                        Icon(Icons.Default.GpsFixed, contentDescription = null, tint = PlatinumSilver, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.GpsFixed, contentDescription = null, tint = colors.textPrimary, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Set Current Parked Location as Safe Zone", color = PlatinumSilver)
+                        Text("Set Current Parked Location as Safe Zone", color = colors.textPrimary)
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))

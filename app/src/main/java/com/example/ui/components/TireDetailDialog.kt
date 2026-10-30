@@ -32,14 +32,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.example.data.model.PressureStatus
 import com.example.data.model.TireInfo
-import com.example.ui.theme.CabinBorder
-import com.example.ui.theme.CabinSurface
-import com.example.ui.theme.CabinSurfaceElevated
+import com.example.ui.theme.AppTheme
 import com.example.ui.theme.DiagnosticAmber
 import com.example.ui.theme.DiagnosticGreen
 import com.example.ui.theme.DiagnosticRed
-import com.example.ui.theme.MetallicGray
-import com.example.ui.theme.PlatinumSilver
 import com.example.ui.theme.SoulRedPrimary
 
 @Composable
@@ -49,6 +45,7 @@ fun TireDetailDialog(
     onSimulateLeak: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val colors = AppTheme.colors
     val statusColor = when (tire.status) {
         PressureStatus.NORMAL -> DiagnosticGreen
         PressureStatus.LOW -> DiagnosticAmber
@@ -58,8 +55,8 @@ fun TireDetailDialog(
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(20.dp),
-            color = CabinSurface,
-            border = androidx.compose.foundation.BorderStroke(1.dp, CabinBorder),
+            color = colors.surface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, colors.border),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(8.dp)
@@ -91,7 +88,7 @@ fun TireDetailDialog(
                     text = "${tire.name} (${tire.id})",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = PlatinumSilver
+                    color = colors.textPrimary
                 )
 
                 Text(
@@ -108,7 +105,7 @@ fun TireDetailDialog(
 
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = CabinSurfaceElevated,
+                    color = colors.surfaceElevated,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
@@ -116,15 +113,15 @@ fun TireDetailDialog(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Current Pressure", color = MetallicGray)
-                            Text("${tire.currentPsi} PSI", fontWeight = FontWeight.Bold, color = PlatinumSilver)
+                            Text("Current Pressure", color = colors.textSecondary)
+                            Text("${tire.currentPsi} PSI", fontWeight = FontWeight.Bold, color = colors.textPrimary)
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Recommended Target", color = MetallicGray)
+                            Text("Recommended Target", color = colors.textSecondary)
                             Text("${tire.recommendedPsi} PSI", fontWeight = FontWeight.SemiBold, color = DiagnosticGreen)
                         }
                         Spacer(modifier = Modifier.height(8.dp))
@@ -132,8 +129,8 @@ fun TireDetailDialog(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Tire Internal Temp", color = MetallicGray)
-                            Text("${tire.tempF}°F", color = PlatinumSilver)
+                            Text("Tire Internal Temp", color = colors.textSecondary)
+                            Text("${tire.tempF}°F", color = colors.textPrimary)
                         }
                     }
                 }
@@ -171,7 +168,7 @@ fun TireDetailDialog(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Close", color = PlatinumSilver)
+                    Text("Close", color = colors.textPrimary)
                 }
             }
         }

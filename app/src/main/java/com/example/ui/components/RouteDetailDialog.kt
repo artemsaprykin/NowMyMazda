@@ -48,15 +48,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.data.local.TripLogEntity
-import com.example.ui.theme.CabinBackground
-import com.example.ui.theme.CabinBorder
-import com.example.ui.theme.CabinSurface
-import com.example.ui.theme.CabinSurfaceElevated
+import com.example.ui.theme.AppTheme
 import com.example.ui.theme.DiagnosticGreen
 import com.example.ui.theme.DiagnosticRed
 import com.example.ui.theme.ElectricCyan
-import com.example.ui.theme.MetallicGray
-import com.example.ui.theme.PlatinumSilver
 import com.example.ui.theme.SoulRedDark
 import com.example.ui.theme.SoulRedLight
 import com.example.ui.theme.SoulRedPrimary
@@ -70,14 +65,15 @@ fun RouteDetailDialog(
     onDelete: (Long) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val colors = AppTheme.colors
     val dateFormat = remember { SimpleDateFormat("EEEE, MMM d, yyyy • h:mm a", Locale.US) }
     val formattedDate = remember(trip.startTimeMillis) { dateFormat.format(Date(trip.startTimeMillis)) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(24.dp),
-            color = CabinSurface,
-            border = androidx.compose.foundation.BorderStroke(1.dp, CabinBorder),
+            color = colors.surface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, colors.border),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(4.dp)
@@ -132,7 +128,7 @@ fun RouteDetailDialog(
                 Text(
                     text = formattedDate,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MetallicGray
+                    color = colors.textSecondary
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -144,7 +140,7 @@ fun RouteDetailDialog(
                         .height(170.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .background(Color(0xFF0A0D12))
-                        .border(1.dp, CabinBorder, RoundedCornerShape(16.dp))
+                        .border(1.dp, colors.border, RoundedCornerShape(16.dp))
                 ) {
                     Canvas(modifier = Modifier.padding(16.dp).fillMaxWidth().height(140.dp)) {
                         val w = size.width
@@ -227,7 +223,7 @@ fun RouteDetailDialog(
 
                         // Intermediate waypoint
                         drawCircle(
-                            color = PlatinumSilver,
+                            color = Color(0xFFF1F5F9),
                             radius = 3.5f,
                             center = Offset(w * 0.55f, h * 0.60f)
                         )
@@ -272,26 +268,26 @@ fun RouteDetailDialog(
                 // Route summary path
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = CabinSurfaceElevated,
+                    color = colors.surfaceElevated,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Place, contentDescription = null, tint = DiagnosticGreen, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(trip.startAddress, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = PlatinumSilver)
+                            Text(trip.startAddress, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = colors.textPrimary)
                         }
                         Box(
                             modifier = Modifier
                                 .padding(start = 7.dp)
                                 .width(2.dp)
                                 .height(12.dp)
-                                .background(CabinBorder)
+                                .background(colors.border)
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Place, contentDescription = null, tint = ElectricCyan, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(trip.endAddress, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = PlatinumSilver)
+                            Text(trip.endAddress, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = colors.textPrimary)
                         }
 
                         if (trip.routeSummary.isNotBlank()) {
@@ -300,7 +296,7 @@ fun RouteDetailDialog(
                                 text = "Route: ${trip.routeSummary}",
                                 style = MaterialTheme.typography.bodySmall,
                                 fontSize = 11.sp,
-                                color = MetallicGray
+                                color = colors.textSecondary
                             )
                         }
                     }
@@ -382,10 +378,10 @@ fun RouteDetailDialog(
 
                     Button(
                         onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = CabinBorder),
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.surfaceElevated),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Close", color = PlatinumSilver)
+                        Text("Close", color = colors.textPrimary)
                     }
                 }
             }
@@ -400,19 +396,20 @@ fun TelemetryMiniCard(
     value: String,
     modifier: Modifier = Modifier
 ) {
+    val colors = AppTheme.colors
     Surface(
         shape = RoundedCornerShape(10.dp),
-        color = CabinSurfaceElevated,
+        color = colors.surfaceElevated,
         modifier = modifier
     ) {
         Column(modifier = Modifier.padding(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = icon, contentDescription = null, tint = MetallicGray, modifier = Modifier.size(12.dp))
+                Icon(imageVector = icon, contentDescription = null, tint = colors.textSecondary, modifier = Modifier.size(12.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(label, style = MaterialTheme.typography.labelSmall, color = MetallicGray, fontSize = 9.sp)
+                Text(label, style = MaterialTheme.typography.labelSmall, color = colors.textSecondary, fontSize = 9.sp)
             }
             Spacer(modifier = Modifier.height(2.dp))
-            Text(value, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = PlatinumSilver, fontSize = 12.sp)
+            Text(value, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = colors.textPrimary, fontSize = 12.sp)
         }
     }
 }

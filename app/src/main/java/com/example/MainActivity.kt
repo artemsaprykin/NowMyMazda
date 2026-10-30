@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Brightness4
+import androidx.compose.material.icons.filled.Brightness7
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.LocationOn
@@ -64,24 +66,24 @@ import com.example.ui.screens.DiagnosticsScreen
 import com.example.ui.screens.LocateScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.TripLogScreen
-import com.example.ui.theme.CabinBackground
-import com.example.ui.theme.CabinBorder
-import com.example.ui.theme.CabinSurface
+import com.example.ui.theme.AppTheme
 import com.example.ui.theme.DiagnosticGreen
-import com.example.ui.theme.MetallicGray
 import com.example.ui.theme.MyApplicationTheme
-import com.example.ui.theme.PlatinumSilver
 import com.example.ui.theme.SoulRedDark
 import com.example.ui.theme.SoulRedLight
 import com.example.ui.theme.SoulRedPrimary
+import com.example.ui.theme.ThemeMode
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            MyApplicationTheme {
-                MainAppScreen()
+            val viewModel: VehicleViewModel = viewModel()
+            val currentTheme by viewModel.themeMode.collectAsStateWithLifecycle()
+
+            MyApplicationTheme(themeMode = currentTheme) {
+                MainAppScreen(viewModel = viewModel)
             }
         }
     }
@@ -90,8 +92,9 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainAppScreen(
-    viewModel: VehicleViewModel = viewModel()
+    viewModel: VehicleViewModel
 ) {
+    val colors = AppTheme.colors
     val vehicleState by viewModel.vehicleState.collectAsStateWithLifecycle()
     val filteredTrips by viewModel.filteredAndSortedTrips.collectAsStateWithLifecycle()
     val tripSearchQuery by viewModel.tripSearchQuery.collectAsStateWithLifecycle()
@@ -102,6 +105,7 @@ fun MainAppScreen(
     val securityConfig by viewModel.securityConfig.collectAsStateWithLifecycle()
     val pendingAction by viewModel.pendingSecurityAction.collectAsStateWithLifecycle()
     val biometricErrorMessage by viewModel.biometricErrorMessage.collectAsStateWithLifecycle()
+    val currentTheme by viewModel.themeMode.collectAsStateWithLifecycle()
 
     // Request notification permissions on Android 13+
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -121,7 +125,7 @@ fun MainAppScreen(
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        containerColor = CabinBackground,
+        containerColor = colors.background,
         topBar = {
             TopAppBar(
                 title = {
@@ -138,7 +142,7 @@ fun MainAppScreen(
                             Icon(
                                 imageVector = Icons.Default.DirectionsCar,
                                 contentDescription = null,
-                                tint = PlatinumSilver,
+                                tint = Color.White,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -148,7 +152,7 @@ fun MainAppScreen(
                                 text = stringResource(id = R.string.app_name),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = PlatinumSilver
+                                color = colors.textPrimary
                             )
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(
@@ -161,7 +165,7 @@ fun MainAppScreen(
                                 Text(
                                     text = vehicleState.nickname,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MetallicGray,
+                                    color = colors.textSecondary,
                                     fontSize = 11.sp
                                 )
                             }
@@ -169,6 +173,22 @@ fun MainAppScreen(
                     }
                 },
                 actions = {
+                    // Quick Light / Dark Theme Toggle
+                    IconButton(
+                        onClick = {
+                            val next = if (currentTheme == ThemeMode.DARK) ThemeMode.LIGHT else ThemeMode.DARK
+                            viewModel.setThemeMode(next)
+                        },
+                        modifier = Modifier.testTag("app_bar_theme_toggle")
+                    ) {
+                        Icon(
+                            imageVector = if (currentTheme == ThemeMode.DARK) Icons.Default.Brightness7 else Icons.Default.Brightness4,
+                            contentDescription = "Toggle Light/Dark Theme",
+                            tint = colors.textPrimary
+                        )
+                    }
+
+                    // Cloud Sync Button
                     IconButton(
                         onClick = { viewModel.syncCloudApi() },
                         modifier = Modifier.testTag("app_bar_sync_btn")
@@ -183,20 +203,20 @@ fun MainAppScreen(
                             Icon(
                                 imageVector = Icons.Default.Refresh,
                                 contentDescription = "Sync",
-                                tint = PlatinumSilver
+                                tint = colors.textPrimary
                             )
                         }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = CabinBackground,
-                    titleContentColor = PlatinumSilver
+                    containerColor = colors.background,
+                    titleContentColor = colors.textPrimary
                 )
             )
         },
         bottomBar = {
             NavigationBar(
-                containerColor = CabinSurface,
+                containerColor = colors.surface,
                 tonalElevation = 8.dp,
                 modifier = Modifier.testTag("bottom_nav_bar")
             ) {
@@ -214,8 +234,8 @@ fun MainAppScreen(
                         selectedIconColor = Color.White,
                         selectedTextColor = SoulRedLight,
                         indicatorColor = SoulRedPrimary,
-                        unselectedIconColor = MetallicGray,
-                        unselectedTextColor = MetallicGray
+                        unselectedIconColor = colors.textSecondary,
+                        unselectedTextColor = colors.textSecondary
                     ),
                     modifier = Modifier.testTag("nav_tab_dashboard")
                 )
@@ -234,8 +254,8 @@ fun MainAppScreen(
                         selectedIconColor = Color.White,
                         selectedTextColor = SoulRedLight,
                         indicatorColor = SoulRedPrimary,
-                        unselectedIconColor = MetallicGray,
-                        unselectedTextColor = MetallicGray
+                        unselectedIconColor = colors.textSecondary,
+                        unselectedTextColor = colors.textSecondary
                     ),
                     modifier = Modifier.testTag("nav_tab_diagnostics")
                 )
@@ -254,8 +274,8 @@ fun MainAppScreen(
                         selectedIconColor = Color.White,
                         selectedTextColor = SoulRedLight,
                         indicatorColor = SoulRedPrimary,
-                        unselectedIconColor = MetallicGray,
-                        unselectedTextColor = MetallicGray
+                        unselectedIconColor = colors.textSecondary,
+                        unselectedTextColor = colors.textSecondary
                     ),
                     modifier = Modifier.testTag("nav_tab_locate")
                 )
@@ -274,8 +294,8 @@ fun MainAppScreen(
                         selectedIconColor = Color.White,
                         selectedTextColor = SoulRedLight,
                         indicatorColor = SoulRedPrimary,
-                        unselectedIconColor = MetallicGray,
-                        unselectedTextColor = MetallicGray
+                        unselectedIconColor = colors.textSecondary,
+                        unselectedTextColor = colors.textSecondary
                     ),
                     modifier = Modifier.testTag("nav_tab_trips")
                 )
@@ -294,8 +314,8 @@ fun MainAppScreen(
                         selectedIconColor = Color.White,
                         selectedTextColor = SoulRedLight,
                         indicatorColor = SoulRedPrimary,
-                        unselectedIconColor = MetallicGray,
-                        unselectedTextColor = MetallicGray
+                        unselectedIconColor = colors.textSecondary,
+                        unselectedTextColor = colors.textSecondary
                     ),
                     modifier = Modifier.testTag("nav_tab_settings")
                 )
@@ -319,7 +339,9 @@ fun MainAppScreen(
                     onCalibrateTpms = { viewModel.calibrateTpms() },
                     onSimulateTireLeak = { viewModel.simulateTirePressureLeak() },
                     onSyncCloud = { viewModel.syncCloudApi() },
-                    onSaveCloudConfig = { url, token -> viewModel.updateCloudConfig(url, token) }
+                    onSaveCloudConfig = { url, token -> viewModel.updateCloudConfig(url, token) },
+                    onLinkMyMazda = { email, vin, region -> viewModel.linkMyMazdaAccount(email, vin, region) },
+                    onPairWithInCarCode = { code -> viewModel.pairWithInCarCode(code) }
                 )
 
                 VehicleNavTab.DIAGNOSTICS -> DiagnosticsScreen(
@@ -362,6 +384,10 @@ fun MainAppScreen(
                 VehicleNavTab.SETTINGS -> SettingsScreen(
                     vehicleState = vehicleState,
                     securityConfig = securityConfig,
+                    currentTheme = currentTheme,
+                    onThemeChange = { viewModel.setThemeMode(it) },
+                    onLinkMyMazda = { email, vin, region -> viewModel.linkMyMazdaAccount(email, vin, region) },
+                    onPairInCarCode = { code -> viewModel.pairWithInCarCode(code) },
                     onUpdateSecurityConfig = { cfg -> viewModel.updateSecurityConfig(cfg) },
                     onSaveCloudConfig = { url, token -> viewModel.updateCloudConfig(url, token) },
                     onSyncCloud = { viewModel.syncCloudApi() }

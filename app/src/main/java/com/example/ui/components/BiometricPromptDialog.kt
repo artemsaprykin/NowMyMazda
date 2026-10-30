@@ -44,14 +44,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.ui.PendingSecurityAction
-import com.example.ui.theme.CabinBackground
-import com.example.ui.theme.CabinBorder
-import com.example.ui.theme.CabinSurface
-import com.example.ui.theme.CabinSurfaceElevated
+import com.example.ui.theme.AppTheme
 import com.example.ui.theme.DiagnosticRed
 import com.example.ui.theme.ElectricCyan
-import com.example.ui.theme.MetallicGray
-import com.example.ui.theme.PlatinumSilver
 import com.example.ui.theme.SoulRedDark
 import com.example.ui.theme.SoulRedLight
 import com.example.ui.theme.SoulRedPrimary
@@ -64,14 +59,15 @@ fun BiometricPromptDialog(
     onPinSubmit: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val colors = AppTheme.colors
     var showPinInput by remember { mutableStateOf(false) }
     var enteredPin by remember { mutableStateOf("") }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(24.dp),
-            color = CabinSurface,
-            border = androidx.compose.foundation.BorderStroke(1.dp, CabinBorder),
+            color = colors.surface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, colors.border),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(8.dp)
@@ -104,7 +100,7 @@ fun BiometricPromptDialog(
                     text = pendingAction.title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = PlatinumSilver,
+                    color = colors.textPrimary,
                     textAlign = TextAlign.Center
                 )
 
@@ -113,7 +109,7 @@ fun BiometricPromptDialog(
                 Text(
                     text = pendingAction.description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MetallicGray,
+                    color = colors.textSecondary,
                     textAlign = TextAlign.Center
                 )
 
@@ -125,7 +121,7 @@ fun BiometricPromptDialog(
                         modifier = Modifier
                             .size(90.dp)
                             .clip(CircleShape)
-                            .background(CabinSurfaceElevated)
+                            .background(colors.surfaceElevated)
                             .border(2.dp, ElectricCyan.copy(alpha = 0.7f), CircleShape)
                             .clickable { onBiometricSuccess() }
                             .testTag("biometric_fingerprint_touch"),
@@ -144,7 +140,7 @@ fun BiometricPromptDialog(
                     Text(
                         text = "Touch sensor to authenticate",
                         style = MaterialTheme.typography.labelSmall,
-                        color = PlatinumSilver
+                        color = colors.textPrimary
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -167,7 +163,7 @@ fun BiometricPromptDialog(
                     ) {
                         Text(
                             text = "Use 4-Digit Security PIN instead",
-                            color = MetallicGray,
+                            color = colors.textSecondary,
                             style = MaterialTheme.typography.labelMedium
                         )
                     }
@@ -176,7 +172,7 @@ fun BiometricPromptDialog(
                     Text(
                         text = "Enter Security PIN",
                         style = MaterialTheme.typography.labelLarge,
-                        color = PlatinumSilver
+                        color = colors.textPrimary
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
@@ -191,9 +187,9 @@ fun BiometricPromptDialog(
                                     .size(16.dp)
                                     .clip(CircleShape)
                                     .background(
-                                        if (i < enteredPin.length) SoulRedLight else CabinSurfaceElevated
+                                        if (i < enteredPin.length) SoulRedLight else colors.surfaceElevated
                                     )
-                                    .border(1.dp, CabinBorder, CircleShape)
+                                    .border(1.dp, colors.border, CircleShape)
                             )
                         }
                     }
@@ -227,7 +223,7 @@ fun BiometricPromptDialog(
                                 for (key in row) {
                                     Surface(
                                         shape = RoundedCornerShape(12.dp),
-                                        color = CabinSurfaceElevated,
+                                        color = colors.surfaceElevated,
                                         modifier = Modifier
                                             .size(54.dp)
                                             .clickable {
@@ -253,7 +249,7 @@ fun BiometricPromptDialog(
                                                 text = key,
                                                 style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold,
-                                                color = PlatinumSilver
+                                                color = colors.textPrimary
                                             )
                                         }
                                     }
@@ -265,7 +261,7 @@ fun BiometricPromptDialog(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     TextButton(onClick = { showPinInput = false }) {
-                        Text("Back to Biometrics", color = MetallicGray)
+                        Text("Back to Biometrics", color = colors.textSecondary)
                     }
                 }
 
@@ -275,7 +271,7 @@ fun BiometricPromptDialog(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Cancel", color = PlatinumSilver)
+                    Text("Cancel", color = colors.textPrimary)
                 }
             }
         }

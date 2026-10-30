@@ -70,13 +70,9 @@ import com.example.data.model.VehicleState
 import com.example.ui.TripSortOption
 import com.example.ui.components.ActiveDriveCard
 import com.example.ui.components.RouteDetailDialog
-import com.example.ui.theme.CabinBorder
-import com.example.ui.theme.CabinSurface
-import com.example.ui.theme.CabinSurfaceElevated
+import com.example.ui.theme.AppTheme
 import com.example.ui.theme.DiagnosticGreen
 import com.example.ui.theme.ElectricCyan
-import com.example.ui.theme.MetallicGray
-import com.example.ui.theme.PlatinumSilver
 import com.example.ui.theme.SoulRedDark
 import com.example.ui.theme.SoulRedLight
 import com.example.ui.theme.SoulRedPrimary
@@ -104,6 +100,7 @@ fun TripLogScreen(
     var showManualAddDialog by remember { mutableStateOf(false) }
     var selectedTripForDetails by remember { mutableStateOf<TripLogEntity?>(null) }
     var sortMenuExpanded by remember { mutableStateOf(false) }
+    val colors = AppTheme.colors
 
     val totalMiles = trips.sumOf { it.distanceMiles }
     val avgMpg = if (trips.isNotEmpty()) trips.map { it.avgMpg }.average() else 0.0
@@ -130,7 +127,7 @@ fun TripLogScreen(
                         text = "Trip History & Telematics",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = PlatinumSilver
+                        color = colors.textPrimary
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
@@ -178,8 +175,8 @@ fun TripLogScreen(
         item {
             Card(
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = CabinSurface),
-                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CabinBorder)),
+                colors = CardDefaults.cardColors(containerColor = colors.surface),
+                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.border)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -187,7 +184,7 @@ fun TripLogScreen(
                         text = "Trip History Analytics",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MetallicGray
+                        color = colors.textSecondary
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
@@ -227,25 +224,25 @@ fun TripLogScreen(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = onSearchQueryChange,
-                    placeholder = { Text("Search routes, streets, tags...", color = MetallicGray, fontSize = 13.sp) },
+                    placeholder = { Text("Search routes, streets, tags...", color = colors.textSecondary, fontSize = 13.sp) },
                     leadingIcon = {
-                        Icon(Icons.Default.Search, contentDescription = "Search", tint = MetallicGray, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Search, contentDescription = "Search", tint = colors.textSecondary, modifier = Modifier.size(18.dp))
                     },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
                             IconButton(onClick = { onSearchQueryChange("") }) {
-                                Icon(Icons.Default.Clear, contentDescription = "Clear", tint = MetallicGray, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.Clear, contentDescription = "Clear", tint = colors.textSecondary, modifier = Modifier.size(16.dp))
                             }
                         }
                     },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = PlatinumSilver,
-                        unfocusedTextColor = PlatinumSilver,
+                        focusedTextColor = colors.textPrimary,
+                        unfocusedTextColor = colors.textPrimary,
                         focusedBorderColor = SoulRedPrimary,
-                        unfocusedBorderColor = CabinBorder,
-                        focusedContainerColor = CabinSurface,
-                        unfocusedContainerColor = CabinSurface
+                        unfocusedBorderColor = colors.border,
+                        focusedContainerColor = colors.surface,
+                        unfocusedContainerColor = colors.surface
                     ),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
@@ -257,28 +254,28 @@ fun TripLogScreen(
                 Box {
                     Button(
                         onClick = { sortMenuExpanded = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = CabinSurfaceElevated),
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.surfaceElevated),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .height(52.dp)
                             .testTag("trip_sort_button")
                     ) {
-                        Icon(Icons.Default.Sort, contentDescription = "Sort", tint = PlatinumSilver, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Sort, contentDescription = "Sort", tint = colors.textPrimary, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Sort", color = PlatinumSilver, fontSize = 12.sp)
+                        Text("Sort", color = colors.textPrimary, fontSize = 12.sp)
                     }
 
                     DropdownMenu(
                         expanded = sortMenuExpanded,
                         onDismissRequest = { sortMenuExpanded = false },
-                        modifier = Modifier.background(CabinSurface)
+                        modifier = Modifier.background(colors.surface)
                     ) {
                         TripSortOption.entries.forEach { option ->
                             DropdownMenuItem(
                                 text = {
                                     Text(
                                         text = option.displayName,
-                                        color = if (selectedSort == option) SoulRedLight else PlatinumSilver,
+                                        color = if (selectedSort == option) SoulRedLight else colors.textPrimary,
                                         fontWeight = if (selectedSort == option) FontWeight.Bold else FontWeight.Normal
                                     )
                                 },
@@ -309,8 +306,8 @@ fun TripLogScreen(
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = SoulRedPrimary,
                             selectedLabelColor = Color.White,
-                            containerColor = CabinSurface,
-                            labelColor = MetallicGray
+                            containerColor = colors.surface,
+                            labelColor = colors.textSecondary
                         ),
                         modifier = Modifier.testTag("filter_tag_$tag")
                     )
@@ -328,7 +325,7 @@ fun TripLogScreen(
                 Text(
                     text = "Showing ${trips.size} trips (${selectedSort.displayName})",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MetallicGray
+                    color = colors.textSecondary
                 )
 
                 Text(
@@ -349,20 +346,20 @@ fun TripLogScreen(
             item {
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = CabinSurface,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, CabinBorder),
+                    color = colors.surface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, colors.border),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
                         modifier = Modifier.padding(32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Icon(Icons.Default.Timeline, contentDescription = null, tint = MetallicGray, modifier = Modifier.size(44.dp))
+                        Icon(Icons.Default.Timeline, contentDescription = null, tint = colors.textSecondary, modifier = Modifier.size(44.dp))
                         Spacer(modifier = Modifier.height(10.dp))
-                        Text("No matching trips found", color = PlatinumSilver, fontWeight = FontWeight.Bold)
+                        Text("No matching trips found", color = colors.textPrimary, fontWeight = FontWeight.Bold)
                         Text(
                             text = if (searchQuery.isNotEmpty()) "Try adjusting your search terms or filter." else "Drive your vehicle to auto-record trips.",
-                            color = MetallicGray,
+                            color = colors.textSecondary,
                             fontSize = 12.sp
                         )
                     }
@@ -429,10 +426,11 @@ fun TripHistoryDetailedCard(
     val startTimeStr = remember(trip.startTimeMillis) { timeFormat.format(Date(trip.startTimeMillis)) }
     val endTimeStr = remember(trip.endTimeMillis) { timeFormat.format(Date(trip.endTimeMillis)) }
 
+    val colors = AppTheme.colors
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = CabinSurface),
-        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CabinBorder)),
+        colors = CardDefaults.cardColors(containerColor = colors.surface),
+        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.border)),
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onViewRouteMap() }
@@ -462,7 +460,7 @@ fun TripHistoryDetailedCard(
                     Text(
                         text = "$dateStr • $startTimeStr → $endTimeStr",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MetallicGray,
+                        color = colors.textSecondary,
                         fontSize = 11.sp
                     )
                 }
@@ -470,7 +468,7 @@ fun TripHistoryDetailedCard(
                 // i-DM score badge
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = Color(0xFF142B1F),
+                    color = DiagnosticGreen.copy(alpha = 0.15f),
                     border = androidx.compose.foundation.BorderStroke(1.dp, DiagnosticGreen.copy(alpha = 0.6f))
                 ) {
                     Row(
@@ -500,7 +498,7 @@ fun TripHistoryDetailedCard(
                     text = trip.startAddress,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = PlatinumSilver
+                    color = colors.textPrimary
                 )
             }
 
@@ -509,7 +507,7 @@ fun TripHistoryDetailedCard(
                     .padding(start = 6.dp)
                     .width(2.dp)
                     .height(10.dp)
-                    .background(CabinBorder)
+                    .background(colors.border)
             )
 
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -519,7 +517,7 @@ fun TripHistoryDetailedCard(
                     text = trip.endAddress,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = PlatinumSilver
+                    color = colors.textPrimary
                 )
             }
 
@@ -530,7 +528,7 @@ fun TripHistoryDetailedCard(
                     text = "Route taken: ${trip.routeSummary}",
                     style = MaterialTheme.typography.bodySmall,
                     fontSize = 11.sp,
-                    color = MetallicGray
+                    color = colors.textSecondary
                 )
             }
 
@@ -540,40 +538,40 @@ fun TripHistoryDetailedCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(CabinSurfaceElevated, RoundedCornerShape(10.dp))
+                    .background(colors.surfaceElevated, RoundedCornerShape(10.dp))
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text("Distance", color = MetallicGray, fontSize = 9.sp)
-                    Text("${trip.distanceMiles} mi", fontWeight = FontWeight.Bold, color = PlatinumSilver, fontSize = 12.sp)
+                    Text("Distance", color = colors.textSecondary, fontSize = 9.sp)
+                    Text("${trip.distanceMiles} mi", fontWeight = FontWeight.Bold, color = colors.textPrimary, fontSize = 12.sp)
                 }
                 Column {
-                    Text("Duration", color = MetallicGray, fontSize = 9.sp)
-                    Text("${trip.durationMinutes} min", fontWeight = FontWeight.Bold, color = PlatinumSilver, fontSize = 12.sp)
+                    Text("Duration", color = colors.textSecondary, fontSize = 9.sp)
+                    Text("${trip.durationMinutes} min", fontWeight = FontWeight.Bold, color = colors.textPrimary, fontSize = 12.sp)
                 }
                 Column {
-                    Text("Economy", color = MetallicGray, fontSize = 9.sp)
+                    Text("Economy", color = colors.textSecondary, fontSize = 9.sp)
                     Text("${trip.avgMpg} MPG", fontWeight = FontWeight.Bold, color = ElectricCyan, fontSize = 12.sp)
                 }
                 Column {
-                    Text("Avg Speed", color = MetallicGray, fontSize = 9.sp)
-                    Text("${trip.avgSpeedMph.toInt()} mph", fontWeight = FontWeight.Bold, color = PlatinumSilver, fontSize = 12.sp)
+                    Text("Avg Speed", color = colors.textSecondary, fontSize = 9.sp)
+                    Text("${trip.avgSpeedMph.toInt()} mph", fontWeight = FontWeight.Bold, color = colors.textPrimary, fontSize = 12.sp)
                 }
 
                 Surface(
                     shape = RoundedCornerShape(6.dp),
-                    color = CabinBorder,
+                    color = colors.border,
                     modifier = Modifier.clickable { onViewRouteMap() }
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Map, contentDescription = null, tint = PlatinumSilver, modifier = Modifier.size(12.dp))
+                        Icon(Icons.Default.Map, contentDescription = null, tint = colors.textPrimary, modifier = Modifier.size(12.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Map", fontSize = 10.sp, color = PlatinumSilver, fontWeight = FontWeight.Bold)
+                        Text("Map", fontSize = 10.sp, color = colors.textPrimary, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -586,6 +584,7 @@ fun StartLiveDriveModal(
     onStart: (String, String, String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val colors = AppTheme.colors
     var selectedPresetIndex by remember { mutableStateOf(0) }
 
     val presets = listOf(
@@ -598,8 +597,8 @@ fun StartLiveDriveModal(
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(20.dp),
-            color = CabinSurface,
-            border = androidx.compose.foundation.BorderStroke(1.dp, CabinBorder),
+            color = colors.surface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, colors.border),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(8.dp)
@@ -614,12 +613,12 @@ fun StartLiveDriveModal(
                             text = "Start Vehicle Drive",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = PlatinumSilver
+                            color = colors.textPrimary
                         )
                         Text(
                             text = "Ignition will turn ON and auto-record journey telemetry.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MetallicGray
+                            color = colors.textSecondary
                         )
                     }
                 }
@@ -630,17 +629,17 @@ fun StartLiveDriveModal(
                     text = "Select Route Destination:",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MetallicGray
+                    color = colors.textSecondary
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
                 presets.forEachIndexed { index, (origin, destination, tag) ->
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = if (selectedPresetIndex == index) SoulRedDark.copy(alpha = 0.3f) else CabinSurfaceElevated,
+                        color = if (selectedPresetIndex == index) SoulRedDark.copy(alpha = 0.3f) else colors.surfaceElevated,
                         border = androidx.compose.foundation.BorderStroke(
                             1.dp,
-                            if (selectedPresetIndex == index) SoulRedLight else CabinBorder
+                            if (selectedPresetIndex == index) SoulRedLight else colors.border
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -659,8 +658,8 @@ fun StartLiveDriveModal(
                                 }
                             }
                             Spacer(modifier = Modifier.height(2.dp))
-                            Text(destination, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = PlatinumSilver)
-                            Text("From: $origin", style = MaterialTheme.typography.bodySmall, color = MetallicGray, fontSize = 11.sp)
+                            Text(destination, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = colors.textPrimary)
+                            Text("From: $origin", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, fontSize = 11.sp)
                         }
                     }
                 }
@@ -688,7 +687,7 @@ fun StartLiveDriveModal(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Cancel", color = PlatinumSilver)
+                    Text("Cancel", color = colors.textPrimary)
                 }
             }
         }
@@ -700,13 +699,14 @@ fun TripStatItem(
     label: String,
     value: String,
     subtext: String,
-    valueColor: Color = PlatinumSilver
+    valueColor: Color? = null
 ) {
+    val colors = AppTheme.colors
     Column {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MetallicGray, fontSize = 11.sp)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = colors.textSecondary, fontSize = 11.sp)
         Spacer(modifier = Modifier.height(2.dp))
-        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = valueColor)
-        Text(subtext, style = MaterialTheme.typography.bodySmall, color = MetallicGray, fontSize = 10.sp)
+        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = valueColor ?: colors.textPrimary)
+        Text(subtext, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, fontSize = 10.sp)
     }
 }
 
@@ -715,6 +715,7 @@ fun AddTripModal(
     onSave: (Double, Int, Double, String, String, String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val colors = AppTheme.colors
     var distanceStr by remember { mutableStateOf("18.5") }
     var durationStr by remember { mutableStateOf("28") }
     var mpgStr by remember { mutableStateOf("28.4") }
@@ -725,8 +726,8 @@ fun AddTripModal(
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(20.dp),
-            color = CabinSurface,
-            border = androidx.compose.foundation.BorderStroke(1.dp, CabinBorder),
+            color = colors.surface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, colors.border),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(8.dp)
@@ -737,7 +738,7 @@ fun AddTripModal(
                     text = "Record Vehicle Trip",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = PlatinumSilver
+                    color = colors.textPrimary
                 )
                 Spacer(modifier = Modifier.height(14.dp))
 
@@ -746,9 +747,12 @@ fun AddTripModal(
                     onValueChange = { startAddress = it },
                     label = { Text("Starting Location") },
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = PlatinumSilver,
-                        unfocusedTextColor = PlatinumSilver,
-                        focusedBorderColor = SoulRedPrimary
+                        focusedTextColor = colors.textPrimary,
+                        unfocusedTextColor = colors.textPrimary,
+                        focusedBorderColor = SoulRedPrimary,
+                        unfocusedBorderColor = colors.border,
+                        focusedContainerColor = colors.surface,
+                        unfocusedContainerColor = colors.surface
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -760,9 +764,12 @@ fun AddTripModal(
                     onValueChange = { endAddress = it },
                     label = { Text("Destination") },
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = PlatinumSilver,
-                        unfocusedTextColor = PlatinumSilver,
-                        focusedBorderColor = SoulRedPrimary
+                        focusedTextColor = colors.textPrimary,
+                        unfocusedTextColor = colors.textPrimary,
+                        focusedBorderColor = SoulRedPrimary,
+                        unfocusedBorderColor = colors.border,
+                        focusedContainerColor = colors.surface,
+                        unfocusedContainerColor = colors.surface
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -778,9 +785,12 @@ fun AddTripModal(
                         onValueChange = { distanceStr = it },
                         label = { Text("Miles") },
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = PlatinumSilver,
-                            unfocusedTextColor = PlatinumSilver,
-                            focusedBorderColor = SoulRedPrimary
+                            focusedTextColor = colors.textPrimary,
+                            unfocusedTextColor = colors.textPrimary,
+                            focusedBorderColor = SoulRedPrimary,
+                            unfocusedBorderColor = colors.border,
+                            focusedContainerColor = colors.surface,
+                            unfocusedContainerColor = colors.surface
                         ),
                         modifier = Modifier.weight(1f)
                     )
@@ -789,9 +799,12 @@ fun AddTripModal(
                         onValueChange = { durationStr = it },
                         label = { Text("Mins") },
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = PlatinumSilver,
-                            unfocusedTextColor = PlatinumSilver,
-                            focusedBorderColor = SoulRedPrimary
+                            focusedTextColor = colors.textPrimary,
+                            unfocusedTextColor = colors.textPrimary,
+                            focusedBorderColor = SoulRedPrimary,
+                            unfocusedBorderColor = colors.border,
+                            focusedContainerColor = colors.surface,
+                            unfocusedContainerColor = colors.surface
                         ),
                         modifier = Modifier.weight(1f)
                     )
@@ -800,9 +813,12 @@ fun AddTripModal(
                         onValueChange = { mpgStr = it },
                         label = { Text("MPG") },
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = PlatinumSilver,
-                            unfocusedTextColor = PlatinumSilver,
-                            focusedBorderColor = SoulRedPrimary
+                            focusedTextColor = colors.textPrimary,
+                            unfocusedTextColor = colors.textPrimary,
+                            focusedBorderColor = SoulRedPrimary,
+                            unfocusedBorderColor = colors.border,
+                            focusedContainerColor = colors.surface,
+                            unfocusedContainerColor = colors.surface
                         ),
                         modifier = Modifier.weight(1f)
                     )
@@ -831,7 +847,7 @@ fun AddTripModal(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Cancel", color = PlatinumSilver)
+                    Text("Cancel", color = colors.textPrimary)
                 }
             }
         }

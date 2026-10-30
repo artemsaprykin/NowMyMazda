@@ -96,13 +96,15 @@ fun VehicleTopDownView(
         label = "hazardFlash"
     )
 
+    val colors = com.example.ui.theme.AppTheme.colors
+
     Card(
         modifier = modifier
             .fillMaxWidth()
             .testTag("vehicle_diagram_card"),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = CabinSurface),
-        border = CardDefaults.outlinedCardBorder().copy(brush = Brush.verticalGradient(listOf(CabinBorder, Color(0xFF1B232D))))
+        colors = CardDefaults.cardColors(containerColor = colors.surface),
+        border = CardDefaults.outlinedCardBorder().copy(brush = Brush.verticalGradient(listOf(colors.border, colors.border.copy(alpha = 0.5f))))
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -119,12 +121,12 @@ fun VehicleTopDownView(
                         text = vehicleState.nickname,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = PlatinumSilver
+                        color = colors.textPrimary
                     )
                     Text(
                         text = "${vehicleState.year} ${vehicleState.modelName}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MetallicGray
+                        color = colors.textSecondary
                     )
                 }
 
@@ -407,7 +409,7 @@ fun VehicleTopDownView(
                                 text = String.format(java.util.Locale.US, "%02d:%02d", remMins, remSecs),
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = PlatinumSilver
+                                color = colors.textPrimary
                             )
                         }
                     }
@@ -437,7 +439,7 @@ fun VehicleTopDownView(
                     icon = null,
                     label = "Est. Range",
                     value = "${vehicleState.estimatedRangeMiles} mi",
-                    color = PlatinumSilver
+                    color = colors.textPrimary
                 )
             }
         }
@@ -456,12 +458,14 @@ fun TirePressureBadge(
         PressureStatus.CRITICAL -> DiagnosticRed
     }
 
+    val colors = com.example.ui.theme.AppTheme.colors
+
     Surface(
         modifier = modifier
             .testTag("tire_badge_${tire.id}")
             .clickable { onClick() },
         shape = RoundedCornerShape(12.dp),
-        color = CabinSurfaceElevated,
+        color = colors.surfaceElevated,
         border = androidx.compose.foundation.BorderStroke(1.dp, statusColor.copy(alpha = 0.8f)),
         shadowElevation = 2.dp
     ) {
@@ -480,7 +484,7 @@ fun TirePressureBadge(
                 Text(
                     text = tire.id,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MetallicGray,
+                    color = colors.textSecondary,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -488,13 +492,13 @@ fun TirePressureBadge(
                 text = "${tire.currentPsi} PSI",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
-                color = PlatinumSilver
+                color = colors.textPrimary
             )
             Text(
                 text = "${tire.tempF}°F",
                 style = MaterialTheme.typography.bodySmall,
                 fontSize = 9.sp,
-                color = MetallicGray
+                color = colors.textSecondary
             )
         }
     }
@@ -507,9 +511,11 @@ fun StatusMetricPill(
     value: String,
     color: Color
 ) {
+    val colors = com.example.ui.theme.AppTheme.colors
+
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = CabinSurfaceElevated,
+        color = colors.surfaceElevated,
         modifier = Modifier.padding(horizontal = 4.dp)
     ) {
         Row(
@@ -530,7 +536,7 @@ fun StatusMetricPill(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
                     fontSize = 10.sp,
-                    color = MetallicGray
+                    color = colors.textSecondary
                 )
                 Text(
                     text = value,

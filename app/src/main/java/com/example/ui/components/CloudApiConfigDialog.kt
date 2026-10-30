@@ -26,11 +26,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.example.data.model.CloudApiConfig
-import com.example.ui.theme.CabinBorder
-import com.example.ui.theme.CabinSurface
+import com.example.ui.theme.AppTheme
 import com.example.ui.theme.DiagnosticGreen
-import com.example.ui.theme.MetallicGray
-import com.example.ui.theme.PlatinumSilver
 import com.example.ui.theme.SoulRedPrimary
 
 @Composable
@@ -40,14 +37,15 @@ fun CloudApiConfigDialog(
     onTestPing: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val colors = AppTheme.colors
     var apiUrl by remember { mutableStateOf(config.apiUrl) }
     var apiToken by remember { mutableStateOf(config.apiToken) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(20.dp),
-            color = CabinSurface,
-            border = androidx.compose.foundation.BorderStroke(1.dp, CabinBorder),
+            color = colors.surface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, colors.border),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(8.dp)
@@ -58,13 +56,13 @@ fun CloudApiConfigDialog(
                     text = "Cloud Vehicle API Connection",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = PlatinumSilver
+                    color = colors.textPrimary
                 )
 
                 Text(
                     text = "Secure telematics REST API gateway for remote commands, telemetry polling, and DTC diagnostic alerts.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MetallicGray,
+                    color = colors.textSecondary,
                     modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
                 )
 
@@ -74,9 +72,9 @@ fun CloudApiConfigDialog(
                     label = { Text("API Gateway URL") },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = SoulRedPrimary,
-                        unfocusedBorderColor = CabinBorder,
-                        focusedTextColor = PlatinumSilver,
-                        unfocusedTextColor = PlatinumSilver
+                        unfocusedBorderColor = colors.border,
+                        focusedTextColor = colors.textPrimary,
+                        unfocusedTextColor = colors.textPrimary
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -91,9 +89,9 @@ fun CloudApiConfigDialog(
                     label = { Text("Secure Telematics Bearer Token") },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = SoulRedPrimary,
-                        unfocusedBorderColor = CabinBorder,
-                        focusedTextColor = PlatinumSilver,
-                        unfocusedTextColor = PlatinumSilver
+                        unfocusedBorderColor = colors.border,
+                        focusedTextColor = colors.textPrimary,
+                        unfocusedTextColor = colors.textPrimary
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -105,22 +103,22 @@ fun CloudApiConfigDialog(
                 Text(
                     text = "VIN: ${config.vin}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MetallicGray
+                    color = colors.textSecondary
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Button(
                     onClick = onTestPing,
-                    colors = ButtonDefaults.buttonColors(containerColor = CabinBorder),
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.surfaceElevated),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("ping_api_button")
                 ) {
                     if (config.isSyncing) {
-                        CircularProgressIndicator(color = PlatinumSilver, strokeWidth = 2.dp)
+                        CircularProgressIndicator(color = colors.textPrimary, strokeWidth = 2.dp)
                     } else {
-                        Text("Test Live Gateway Ping & Sync", color = PlatinumSilver)
+                        Text("Test Live Gateway Ping & Sync", color = colors.textPrimary)
                     }
                 }
 
@@ -145,7 +143,7 @@ fun CloudApiConfigDialog(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Close", color = PlatinumSilver)
+                    Text("Close", color = colors.textPrimary)
                 }
             }
         }

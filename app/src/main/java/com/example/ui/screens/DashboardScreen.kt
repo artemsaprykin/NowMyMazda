@@ -71,18 +71,15 @@ import com.example.data.model.PressureStatus
 import com.example.data.model.TireInfo
 import com.example.data.model.VehicleState
 import com.example.ui.components.CloudApiConfigDialog
+import com.example.ui.components.MyMazdaConnectDialog
 import com.example.ui.components.TireDetailDialog
 import com.example.ui.components.VehicleTopDownView
-import com.example.ui.theme.CabinBorder
-import com.example.ui.theme.CabinSurface
-import com.example.ui.theme.CabinSurfaceElevated
+import com.example.ui.theme.AppTheme
 import com.example.ui.theme.ClimateBlue
 import com.example.ui.theme.DiagnosticAmber
 import com.example.ui.theme.DiagnosticGreen
 import com.example.ui.theme.DiagnosticRed
 import com.example.ui.theme.ElectricCyan
-import com.example.ui.theme.MetallicGray
-import com.example.ui.theme.PlatinumSilver
 import com.example.ui.theme.SoulRedDark
 import com.example.ui.theme.SoulRedLight
 import com.example.ui.theme.SoulRedPrimary
@@ -100,14 +97,19 @@ fun DashboardScreen(
     onSimulateTireLeak: () -> Unit,
     onSyncCloud: () -> Unit,
     onSaveCloudConfig: (String, String) -> Unit,
+    onLinkMyMazda: (String, String, String) -> Unit = { _, _, _ -> },
+    onPairWithInCarCode: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTire by remember { mutableStateOf<TireInfo?>(null) }
     var showCloudDialog by remember { mutableStateOf(false) }
+    var showMyMazdaDialog by remember { mutableStateOf(false) }
 
     var selectedDuration by remember { mutableIntStateOf(15) }
     var selectedTemp by remember { mutableIntStateOf(72) }
     var heatedSeats by remember { mutableStateOf(true) }
+
+    val colors = AppTheme.colors
 
     LazyColumn(
         modifier = modifier
@@ -120,11 +122,11 @@ fun DashboardScreen(
             // Cloud Connection Header
             Surface(
                 shape = RoundedCornerShape(14.dp),
-                color = CabinSurface,
-                border = androidx.compose.foundation.BorderStroke(1.dp, CabinBorder),
+                color = colors.surface,
+                border = androidx.compose.foundation.BorderStroke(1.dp, colors.border),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { showCloudDialog = true }
+                    .clickable { showMyMazdaDialog = true }
                     .testTag("cloud_status_banner")
             ) {
                 Row(
@@ -142,16 +144,16 @@ fun DashboardScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
                             Text(
-                                text = "Mazda Cloud Telematics: Online",
+                                text = "MyMazda Connected: ${vehicleState.myMazdaAccount.email}",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = PlatinumSilver
+                                color = colors.textPrimary
                             )
                             Text(
-                                text = "TCU 4G LTE • Signal ${vehicleState.cloudConfig.cellularSignalBars}/5 bars",
+                                text = "TCU 4G LTE • ${vehicleState.myMazdaAccount.region} • Tap for Pairing",
                                 style = MaterialTheme.typography.bodySmall,
                                 fontSize = 11.sp,
-                                color = MetallicGray
+                                color = colors.textSecondary
                             )
                         }
                     }
@@ -172,7 +174,7 @@ fun DashboardScreen(
                             Icon(
                                 imageVector = Icons.Default.Refresh,
                                 contentDescription = "Sync",
-                                tint = MetallicGray
+                                tint = colors.textSecondary
                             )
                         }
                     }
@@ -222,7 +224,7 @@ fun DashboardScreen(
                                 text = "Open Diagnostics to inspect real-time telematics and resolve.",
                                 style = MaterialTheme.typography.bodySmall,
                                 fontSize = 11.sp,
-                                color = PlatinumSilver.copy(alpha = 0.8f)
+                                color = Color.White.copy(alpha = 0.8f)
                             )
                         }
                     }
@@ -256,15 +258,15 @@ fun DashboardScreen(
                 text = "Remote Controls",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
-                color = PlatinumSilver
+                color = colors.textPrimary
             )
             Spacer(modifier = Modifier.height(10.dp))
 
             // Remote Engine Start / Stop Master Button
             Card(
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = CabinSurface),
-                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CabinBorder)),
+                colors = CardDefaults.cardColors(containerColor = colors.surface),
+                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.border)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -278,7 +280,7 @@ fun DashboardScreen(
                                 modifier = Modifier
                                     .size(42.dp)
                                     .clip(CircleShape)
-                                    .background(if (vehicleState.engineState == EngineState.RUNNING) SoulRedDark else CabinSurfaceElevated),
+                                    .background(if (vehicleState.engineState == EngineState.RUNNING) SoulRedDark else colors.surfaceElevated),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -294,7 +296,7 @@ fun DashboardScreen(
                                     text = if (vehicleState.engineState == EngineState.RUNNING) "Engine is Running" else "Remote Engine Start",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = PlatinumSilver
+                                    color = colors.textPrimary
                                 )
                                 Text(
                                     text = if (vehicleState.engineState == EngineState.RUNNING) {
@@ -305,7 +307,7 @@ fun DashboardScreen(
                                         "Secure cloud ignition with climate preset"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MetallicGray
+                                    color = colors.textSecondary
                                 )
                             }
                         }
@@ -319,7 +321,7 @@ fun DashboardScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Runtime:", style = MaterialTheme.typography.bodySmall, color = MetallicGray)
+                            Text("Runtime:", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 listOf(10, 15, 20).forEach { mins ->
                                     FilterChip(
@@ -348,7 +350,7 @@ fun DashboardScreen(
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Climate Preset:", style = MaterialTheme.typography.bodySmall, color = MetallicGray)
+                                Text("Climate Preset:", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 listOf(68, 72, 76).forEach { temp ->
@@ -462,14 +464,14 @@ fun DashboardScreen(
                 text = "Vehicle Telemetry",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
-                color = PlatinumSilver
+                color = colors.textPrimary
             )
             Spacer(modifier = Modifier.height(10.dp))
 
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = CabinSurface),
-                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CabinBorder)),
+                colors = CardDefaults.cardColors(containerColor = colors.surface),
+                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.border)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -479,15 +481,15 @@ fun DashboardScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.LocalGasStation, contentDescription = null, tint = PlatinumSilver, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.LocalGasStation, contentDescription = null, tint = colors.textPrimary, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Fuel Level", style = MaterialTheme.typography.bodyMedium, color = PlatinumSilver)
+                            Text("Fuel Level", style = MaterialTheme.typography.bodyMedium, color = colors.textPrimary)
                         }
                         Text(
                             text = "${vehicleState.fuelPercent}% • ${vehicleState.estimatedRangeMiles} mi range",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            color = PlatinumSilver
+                            color = colors.textPrimary
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
@@ -498,7 +500,7 @@ fun DashboardScreen(
                             .height(8.dp)
                             .clip(RoundedCornerShape(4.dp)),
                         color = SoulRedPrimary,
-                        trackColor = CabinSurfaceElevated
+                        trackColor = colors.surfaceElevated
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -511,7 +513,7 @@ fun DashboardScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.ElectricBolt, contentDescription = null, tint = DiagnosticGreen, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("12V Battery Health (SoH)", style = MaterialTheme.typography.bodyMedium, color = PlatinumSilver)
+                            Text("12V Battery Health (SoH)", style = MaterialTheme.typography.bodyMedium, color = colors.textPrimary)
                         }
                         Text(
                             text = "${vehicleState.batteryHealth.voltage}V • ${vehicleState.batteryHealth.stateOfHealthPercent}% SoH",
@@ -528,7 +530,7 @@ fun DashboardScreen(
                             .height(8.dp)
                             .clip(RoundedCornerShape(4.dp)),
                         color = DiagnosticGreen,
-                        trackColor = CabinSurfaceElevated
+                        trackColor = colors.surfaceElevated
                     )
                 }
             }
@@ -558,6 +560,20 @@ fun DashboardScreen(
             onDismiss = { showCloudDialog = false }
         )
     }
+
+    // Modal MyMazda Connection & In-Car Pairing Assistant
+    if (showMyMazdaDialog) {
+        MyMazdaConnectDialog(
+            account = vehicleState.myMazdaAccount,
+            onLinkAccount = { email, vin, region ->
+                onLinkMyMazda(email, vin, region)
+            },
+            onPairWithInCarCode = { code ->
+                onPairWithInCarCode(code)
+            },
+            onDismiss = { showMyMazdaDialog = false }
+        )
+    }
 }
 
 @Composable
@@ -571,16 +587,17 @@ fun QuickActionButton(
     testTag: String,
     onClick: () -> Unit
 ) {
+    val colors = AppTheme.colors
     Surface(
         modifier = modifier
             .testTag(testTag)
             .clip(RoundedCornerShape(16.dp))
             .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
-        color = CabinSurface,
+        color = colors.surface,
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            if (isActive) activeColor.copy(alpha = 0.5f) else CabinBorder
+            if (isActive) activeColor.copy(alpha = 0.5f) else colors.border
         )
     ) {
         Row(
@@ -591,13 +608,13 @@ fun QuickActionButton(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(if (isActive) activeColor.copy(alpha = 0.2f) else CabinSurfaceElevated),
+                    .background(if (isActive) activeColor.copy(alpha = 0.2f) else colors.surfaceElevated),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = if (isActive) activeColor else MetallicGray,
+                    tint = if (isActive) activeColor else colors.textSecondary,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -607,13 +624,13 @@ fun QuickActionButton(
                     text = label,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
-                    color = PlatinumSilver
+                    color = colors.textPrimary
                 )
                 Text(
                     text = subtext,
                     style = MaterialTheme.typography.bodySmall,
                     fontSize = 11.sp,
-                    color = if (isActive) activeColor else MetallicGray
+                    color = if (isActive) activeColor else colors.textSecondary
                 )
             }
         }

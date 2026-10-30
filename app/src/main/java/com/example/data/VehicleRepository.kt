@@ -382,6 +382,51 @@ class VehicleRepository(
         tripDao.clearAllTrips(_vehicleState.value.vin)
     }
 
+    fun linkMyMazdaAccount(email: String, vin: String, region: String) {
+        val updatedAccount = _vehicleState.value.myMazdaAccount.copy(
+            email = email,
+            vehicleVin = vin,
+            region = region,
+            isLinked = true,
+            isTcuPaired = true,
+            lastLoginTimestamp = System.currentTimeMillis()
+        )
+        _vehicleState.value = _vehicleState.value.copy(
+            vin = vin,
+            myMazdaAccount = updatedAccount,
+            cloudConfig = _vehicleState.value.cloudConfig.copy(
+                vin = vin,
+                isConnected = true,
+                lastSyncTimestamp = System.currentTimeMillis()
+            )
+        )
+        NotificationHelper.sendAlert(
+            context,
+            301,
+            "MyMazda Account Connected",
+            "Signed in as $email. Telematics control unit paired to VIN $vin."
+        )
+    }
+
+    fun pairWithInCarCode(code: String): Boolean {
+        if (code.length != 6) return false
+        val updatedAccount = _vehicleState.value.myMazdaAccount.copy(
+            isTcuPaired = true,
+            isLinked = true
+        )
+        _vehicleState.value = _vehicleState.value.copy(
+            myMazdaAccount = updatedAccount,
+            cloudConfig = _vehicleState.value.cloudConfig.copy(isConnected = true)
+        )
+        NotificationHelper.sendAlert(
+            context,
+            302,
+            "In-Car Pairing Verified",
+            "Mazda Connect 6-digit handshake completed. Remote commands active."
+        )
+        return true
+    }
+
     fun toggleDoorsLock() {
         val newLock = if (_vehicleState.value.lockState == LockState.LOCKED) LockState.UNLOCKED else LockState.LOCKED
         _vehicleState.value = _vehicleState.value.copy(lockState = newLock)

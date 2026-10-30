@@ -121,6 +121,17 @@ data class ActiveDriveSession(
     val tripTag: String = "Commute"
 )
 
+data class MyMazdaAccount(
+    val email: String = "metra2007@meta.ua",
+    val isLinked: Boolean = true,
+    val region: String = "North America (Mazda Connect USA)",
+    val customerId: String = "MZD-8923019",
+    val vehicleCount: Int = 1,
+    val lastLoginTimestamp: Long = System.currentTimeMillis(),
+    val isTcuPaired: Boolean = true,
+    val vehicleVin: String = "JM3KFBDM9P0128934"
+)
+
 data class VehicleState(
     val vin: String = "JM3KFBDM9P0128934",
     val modelName: String = "Mazda CX-50 Turbo AWD",
@@ -141,5 +152,7 @@ data class VehicleState(
     val location: VehicleGpsLocation = VehicleGpsLocation(),
     val geofence: GeofenceSettings = GeofenceSettings(),
     val cloudConfig: CloudApiConfig = CloudApiConfig(),
-    val activeDriveSession: ActiveDriveSession? = null
+    val activeDriveSession: ActiveDriveSession? = null,
+    val myMazdaAccount: MyMazdaAccount = MyMazdaAccount(),
+    val themeMode: com.example.ui.theme.ThemeMode = com.example.ui.theme.ThemeMode.DARK
 )

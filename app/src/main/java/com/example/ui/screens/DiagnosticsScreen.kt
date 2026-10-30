@@ -62,15 +62,11 @@ import com.example.data.model.PressureStatus
 import com.example.data.model.TireInfo
 import com.example.data.model.VehicleState
 import com.example.ui.components.TireDetailDialog
-import com.example.ui.theme.CabinBorder
-import com.example.ui.theme.CabinSurface
-import com.example.ui.theme.CabinSurfaceElevated
+import com.example.ui.theme.AppTheme
 import com.example.ui.theme.DiagnosticAmber
 import com.example.ui.theme.DiagnosticGreen
 import com.example.ui.theme.DiagnosticRed
 import com.example.ui.theme.ElectricCyan
-import com.example.ui.theme.MetallicGray
-import com.example.ui.theme.PlatinumSilver
 import com.example.ui.theme.SoulRedLight
 import com.example.ui.theme.SoulRedPrimary
 import kotlinx.coroutines.delay
@@ -91,6 +87,7 @@ fun DiagnosticsScreen(
     var isRunningEcuScan by remember { mutableStateOf(false) }
     var scanSuccessMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val colors = AppTheme.colors
 
     LazyColumn(
         modifier = modifier
@@ -104,12 +101,12 @@ fun DiagnosticsScreen(
                 text = "Vehicle Health & Diagnostics",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                color = PlatinumSilver
+                color = colors.textPrimary
             )
             Text(
                 text = "Real-time battery metrics, TPMS telemetry, and scheduled maintenance reminders.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MetallicGray
+                color = colors.textSecondary
             )
         }
 
@@ -117,8 +114,8 @@ fun DiagnosticsScreen(
         item {
             Card(
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = CabinSurface),
-                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CabinBorder)),
+                colors = CardDefaults.cardColors(containerColor = colors.surface),
+                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.border)),
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("battery_health_card")
@@ -153,19 +150,19 @@ fun DiagnosticsScreen(
                                     text = "12V Battery Health & Charging",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = PlatinumSilver
+                                    color = colors.textPrimary
                                 )
                                 Text(
                                     text = vehicleState.batteryHealth.healthSummary,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = if (vehicleState.batteryHealth.voltage >= 12.2) DiagnosticGreen else DiagnosticAmber
-                                )
+                                 )
                             }
                         }
 
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = CabinSurfaceElevated
+                            color = colors.surfaceElevated
                         ) {
                             Text(
                                 text = "${vehicleState.batteryHealth.voltage}V",
@@ -208,7 +205,7 @@ fun DiagnosticsScreen(
 
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = CabinSurfaceElevated,
+                        color = colors.surfaceElevated,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -225,7 +222,7 @@ fun DiagnosticsScreen(
                             Text(
                                 text = "Alternator Telemetry: ${vehicleState.batteryHealth.alternatorStatus}",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = PlatinumSilver
+                                color = colors.textPrimary
                             )
                         }
                     }
@@ -261,8 +258,8 @@ fun DiagnosticsScreen(
         item {
             Card(
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = CabinSurface),
-                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CabinBorder)),
+                colors = CardDefaults.cardColors(containerColor = colors.surface),
+                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.border)),
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("tpms_section_card")
@@ -278,23 +275,23 @@ fun DiagnosticsScreen(
                                 text = "Tire Pressure System (TPMS)",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = PlatinumSilver
+                                color = colors.textPrimary
                             )
                             Text(
                                 text = "Cold recommended target: 36.0 PSI all wheels",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MetallicGray
+                                color = colors.textSecondary
                             )
                         }
 
                         Button(
                             onClick = onCalibrateTpms,
-                            colors = ButtonDefaults.buttonColors(containerColor = CabinSurfaceElevated),
+                            colors = ButtonDefaults.buttonColors(containerColor = colors.surfaceElevated),
                             modifier = Modifier.testTag("calibrate_all_tpms_btn")
                         ) {
-                            Icon(Icons.Default.Refresh, contentDescription = null, tint = PlatinumSilver, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Refresh, contentDescription = null, tint = colors.textPrimary, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Reset", color = PlatinumSilver, fontSize = 12.sp)
+                            Text("Reset", color = colors.textPrimary, fontSize = 12.sp)
                         }
                     }
 
@@ -351,8 +348,8 @@ fun DiagnosticsScreen(
         item {
             Card(
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = CabinSurface),
-                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CabinBorder)),
+                colors = CardDefaults.cardColors(containerColor = colors.surface),
+                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.border)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
@@ -360,7 +357,7 @@ fun DiagnosticsScreen(
                         text = "Fluids & Consumable Wear",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = PlatinumSilver
+                        color = colors.textPrimary
                     )
                     Spacer(modifier = Modifier.height(14.dp))
 
@@ -372,7 +369,7 @@ fun DiagnosticsScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.InvertColors, contentDescription = null, tint = SoulRedLight, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Synthetic Engine Oil (0W-20)", color = PlatinumSilver, style = MaterialTheme.typography.bodyMedium)
+                            Text("Synthetic Engine Oil (0W-20)", color = colors.textPrimary, style = MaterialTheme.typography.bodyMedium)
                         }
                         Text(
                             text = "${vehicleState.diagnostics.oilLifePercent}% (${vehicleState.diagnostics.nextServiceMiles} mi left)",
@@ -389,7 +386,7 @@ fun DiagnosticsScreen(
                             .height(6.dp)
                             .clip(RoundedCornerShape(3.dp)),
                         color = if (vehicleState.diagnostics.oilLifePercent > 20) ElectricCyan else DiagnosticAmber,
-                        trackColor = CabinSurfaceElevated
+                        trackColor = colors.surfaceElevated
                     )
 
                     Spacer(modifier = Modifier.height(14.dp))
@@ -402,7 +399,7 @@ fun DiagnosticsScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Speed, contentDescription = null, tint = DiagnosticGreen, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Brake Pad Thickness", color = PlatinumSilver, style = MaterialTheme.typography.bodyMedium)
+                            Text("Brake Pad Thickness", color = colors.textPrimary, style = MaterialTheme.typography.bodyMedium)
                         }
                         Text(
                             text = "${vehicleState.diagnostics.brakePadsPercent}% (8.5mm - Good)",
@@ -419,7 +416,7 @@ fun DiagnosticsScreen(
                             .height(6.dp)
                             .clip(RoundedCornerShape(3.dp)),
                         color = DiagnosticGreen,
-                        trackColor = CabinSurfaceElevated
+                        trackColor = colors.surfaceElevated
                     )
                 }
             }
@@ -431,12 +428,12 @@ fun DiagnosticsScreen(
                 text = "Push Maintenance Reminders",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = PlatinumSilver
+                color = colors.textPrimary
             )
             Text(
                 text = "Automated alerts sent when odometer approaches scheduled mileage thresholds.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MetallicGray
+                color = colors.textSecondary
             )
         }
 
@@ -452,8 +449,8 @@ fun DiagnosticsScreen(
         item {
             Card(
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = CabinSurface),
-                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CabinBorder)),
+                colors = CardDefaults.cardColors(containerColor = colors.surface),
+                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.border)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
@@ -470,12 +467,12 @@ fun DiagnosticsScreen(
                                     text = "OBD-II Cloud DTC Diagnostic Scanner",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = PlatinumSilver
+                                    color = colors.textPrimary
                                 )
                                 Text(
                                     text = "Scans PCM, TCM, BCM, and i-ACTIVSENSE Radar",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MetallicGray
+                                    color = colors.textSecondary
                                 )
                             }
                         }
@@ -486,7 +483,7 @@ fun DiagnosticsScreen(
                     if (scanSuccessMessage != null) {
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            color = Color(0xFF142B1F),
+                            color = DiagnosticGreen.copy(alpha = 0.15f),
                             border = androidx.compose.foundation.BorderStroke(1.dp, DiagnosticGreen),
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -499,7 +496,7 @@ fun DiagnosticsScreen(
                                 Text(
                                     text = scanSuccessMessage ?: "",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = PlatinumSilver
+                                    color = colors.textPrimary
                                 )
                             }
                         }
@@ -555,17 +552,18 @@ fun BatteryMetricTile(
     subtext: String,
     modifier: Modifier = Modifier
 ) {
+    val colors = AppTheme.colors
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
-        color = CabinSurfaceElevated
+        color = colors.surfaceElevated
     ) {
         Column(modifier = Modifier.padding(10.dp)) {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = MetallicGray, fontSize = 10.sp)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = colors.textSecondary, fontSize = 10.sp)
             Spacer(modifier = Modifier.height(4.dp))
-            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = PlatinumSilver)
+            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = colors.textPrimary)
             Spacer(modifier = Modifier.height(2.dp))
-            Text(subtext, style = MaterialTheme.typography.bodySmall, color = MetallicGray, fontSize = 9.sp)
+            Text(subtext, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, fontSize = 9.sp)
         }
     }
 }
@@ -576,6 +574,7 @@ fun TireCard(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val colors = AppTheme.colors
     val statusColor = when (tire.status) {
         PressureStatus.NORMAL -> DiagnosticGreen
         PressureStatus.LOW -> DiagnosticAmber
@@ -588,7 +587,7 @@ fun TireCard(
             .clickable { onClick() }
             .testTag("tire_card_${tire.id}"),
         shape = RoundedCornerShape(14.dp),
-        color = CabinSurfaceElevated,
+        color = colors.surfaceElevated,
         border = androidx.compose.foundation.BorderStroke(1.dp, statusColor.copy(alpha = 0.5f))
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -600,7 +599,7 @@ fun TireCard(
                 Text(
                     text = "${tire.id} • ${tire.name}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MetallicGray,
+                    color = colors.textSecondary,
                     fontWeight = FontWeight.SemiBold
                 )
                 Box(
@@ -617,13 +616,13 @@ fun TireCard(
                 text = "${tire.currentPsi} PSI",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                color = PlatinumSilver
+                color = colors.textPrimary
             )
 
             Text(
                 text = "Target: ${tire.recommendedPsi} PSI • ${tire.tempF}°F",
                 style = MaterialTheme.typography.bodySmall,
-                color = MetallicGray,
+                color = colors.textSecondary,
                 fontSize = 10.sp
             )
         }
@@ -636,15 +635,16 @@ fun MaintenanceReminderItem(
     currentOdometer: Int,
     onToggle: () -> Unit
 ) {
+    val colors = AppTheme.colors
     val milesRemaining = reminder.dueOdometerMiles - currentOdometer
     val isDueSoon = milesRemaining in 1..1000
 
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = CabinSurface,
+        color = colors.surface,
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            if (reminder.isCompleted) CabinBorder else if (isDueSoon) DiagnosticAmber.copy(alpha = 0.6f) else CabinBorder
+            if (reminder.isCompleted) colors.border else if (isDueSoon) DiagnosticAmber.copy(alpha = 0.6f) else colors.border
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -658,7 +658,7 @@ fun MaintenanceReminderItem(
             Icon(
                 imageVector = if (reminder.isCompleted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
                 contentDescription = null,
-                tint = if (reminder.isCompleted) DiagnosticGreen else MetallicGray,
+                tint = if (reminder.isCompleted) DiagnosticGreen else colors.textSecondary,
                 modifier = Modifier.size(24.dp)
             )
 
@@ -669,12 +669,12 @@ fun MaintenanceReminderItem(
                     text = reminder.title,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
-                    color = if (reminder.isCompleted) MetallicGray else PlatinumSilver
+                    color = if (reminder.isCompleted) colors.textSecondary else colors.textPrimary
                 )
                 Text(
                     text = reminder.description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MetallicGray,
+                    color = colors.textSecondary,
                     fontSize = 11.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
@@ -684,7 +684,7 @@ fun MaintenanceReminderItem(
                     else "Service is due now (${currentOdometer} mi)",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (reminder.isCompleted) DiagnosticGreen else if (isDueSoon) DiagnosticAmber else PlatinumSilver
+                    color = if (reminder.isCompleted) DiagnosticGreen else if (isDueSoon) DiagnosticAmber else colors.textPrimary
                 )
             }
         }

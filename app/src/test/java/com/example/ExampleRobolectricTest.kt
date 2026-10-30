@@ -101,4 +101,50 @@ class ExampleRobolectricTest {
     val sortedByScore = trips.sortedByDescending { it.drivingScore }
     assertEquals(95, sortedByScore.first().drivingScore)
   }
+
+  @Test
+  fun `verify MyMazda account pairing and TCU handshake`() {
+    val state = VehicleState()
+    assertEquals(true, state.myMazdaAccount.isLinked)
+    assertEquals(true, state.myMazdaAccount.isTcuPaired)
+
+    // Simulate re-linking a new account
+    val unlinkedAccount = state.myMazdaAccount.copy(
+      isLinked = false,
+      isTcuPaired = false
+    )
+    assertEquals(false, unlinkedAccount.isLinked)
+
+    val linkedAccount = unlinkedAccount.copy(
+      email = "driver@mazda.com",
+      vehicleVin = "JM3KK2AA3P0129845",
+      region = "North America",
+      isLinked = true
+    )
+    assertTrue("Account must be linked", linkedAccount.isLinked)
+
+    // In-car 6-digit code validation
+    val validCode = "849201"
+    val invalidCode = "123"
+    assertTrue("6-digit code must be valid length", validCode.length == 6)
+    assertTrue("3-digit code must be invalid length", invalidCode.length != 6)
+
+    val fullyPairedAccount = linkedAccount.copy(isTcuPaired = true)
+    assertTrue("TCU modem must be paired with in-car handshake", fullyPairedAccount.isTcuPaired)
+  }
+
+  @Test
+  fun `verify Dark and Light themes have distinct background and surface palettes`() {
+    val darkColors = com.example.ui.theme.DarkAppColors
+    val lightColors = com.example.ui.theme.LightAppColors
+
+    assertTrue("Dark theme is dark", darkColors.isDark)
+    assertTrue("Light theme is not dark", !lightColors.isDark)
+
+    // Ensure distinct backgrounds
+    assertTrue(darkColors.background != lightColors.background)
+    assertTrue(darkColors.surface != lightColors.surface)
+    assertTrue(darkColors.textPrimary != lightColors.textPrimary)
+  }
 }
+

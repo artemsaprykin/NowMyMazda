@@ -49,14 +49,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.ActiveDriveSession
-import com.example.ui.theme.CabinBorder
-import com.example.ui.theme.CabinSurface
-import com.example.ui.theme.CabinSurfaceElevated
+import com.example.ui.theme.AppTheme
 import com.example.ui.theme.DiagnosticGreen
 import com.example.ui.theme.DiagnosticRed
 import com.example.ui.theme.ElectricCyan
-import com.example.ui.theme.MetallicGray
-import com.example.ui.theme.PlatinumSilver
 import com.example.ui.theme.SoulRedDark
 import com.example.ui.theme.SoulRedLight
 import com.example.ui.theme.SoulRedPrimary
@@ -67,6 +63,7 @@ fun ActiveDriveCard(
     onStopDrive: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = AppTheme.colors
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val recordingAlpha by infiniteTransition.animateFloat(
         initialValue = 0.3f,
@@ -147,21 +144,21 @@ fun ActiveDriveCard(
                             text = "${session.currentSpeedMph.toInt()}",
                             style = MaterialTheme.typography.displayMedium,
                             fontWeight = FontWeight.Black,
-                            color = PlatinumSilver
+                            color = colors.textPrimary
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "MPH",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
-                            color = MetallicGray,
+                            color = colors.textSecondary,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                     }
                     Text(
                         text = "Max Speed: ${session.maxSpeedMph.toInt()} mph",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MetallicGray,
+                        color = colors.textSecondary,
                         fontSize = 11.sp
                     )
                 }
@@ -179,7 +176,7 @@ fun ActiveDriveCard(
                         text = String.format(java.util.Locale.US, "Duration: %02d:%02d", mins, secs),
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.SemiBold,
-                        color = PlatinumSilver
+                        color = colors.textPrimary
                     )
                 }
             }
@@ -189,7 +186,7 @@ fun ActiveDriveCard(
             // Current Route Leg Waypoint
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = CabinSurfaceElevated,
+                color = colors.surfaceElevated,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -202,14 +199,14 @@ fun ActiveDriveCard(
                         Text(
                             text = "Current Route Leg:",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MetallicGray,
+                            color = colors.textSecondary,
                             fontSize = 10.sp
                         )
                         Text(
                             text = session.currentRouteLeg,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
-                            color = PlatinumSilver
+                            color = colors.textPrimary
                         )
                     }
                 }
@@ -222,7 +219,7 @@ fun ActiveDriveCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Instant Fuel Economy", style = MaterialTheme.typography.bodySmall, color = MetallicGray)
+                Text("Instant Fuel Economy", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
                 Text("${session.instantMpg} MPG", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = ElectricCyan)
             }
             Spacer(modifier = Modifier.height(4.dp))
@@ -233,7 +230,7 @@ fun ActiveDriveCard(
                     .height(6.dp)
                     .clip(RoundedCornerShape(3.dp)),
                 color = ElectricCyan,
-                trackColor = CabinSurface
+                trackColor = colors.surface
             )
 
             Spacer(modifier = Modifier.height(16.dp))

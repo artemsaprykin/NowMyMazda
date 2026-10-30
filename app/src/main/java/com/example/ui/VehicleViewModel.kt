@@ -101,6 +101,9 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
     private val _biometricErrorMessage = MutableStateFlow<String?>(null)
     val biometricErrorMessage = _biometricErrorMessage.asStateFlow()
 
+    private val _themeMode = MutableStateFlow(com.example.ui.theme.ThemeMode.DARK)
+    val themeMode = _themeMode.asStateFlow()
+
     private val _userGpsLocation = MutableStateFlow<Pair<Double, Double>?>(null)
     val userGpsLocation = _userGpsLocation.asStateFlow()
 
@@ -288,6 +291,18 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             repository.clearAllTrips()
         }
+    }
+
+    fun setThemeMode(mode: com.example.ui.theme.ThemeMode) {
+        _themeMode.value = mode
+    }
+
+    fun linkMyMazdaAccount(email: String, vin: String, region: String) {
+        repository.linkMyMazdaAccount(email, vin, region)
+    }
+
+    fun pairWithInCarCode(code: String): Boolean {
+        return repository.pairWithInCarCode(code)
     }
 
     fun updateUserLocation(lat: Double, lng: Double) {
