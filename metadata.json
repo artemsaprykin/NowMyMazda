@@ -1,0 +1,6 @@
+{
+  "name": "My Mazda",
+  "description": "Connected vehicle control app with remote start, real-time diagnostic alerts, battery health monitoring, tire pressure tracking, trip logging, and GPS locator with geofencing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

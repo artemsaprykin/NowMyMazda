@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">My Mazda</string>
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_diagnostics">Diagnostics</string>
+    <string name="nav_location">Locate</string>
+    <string name="nav_trips">Trip Log</string>
+    <string name="nav_settings">Settings</string>
+    <string name="remote_start">Remote Start</string>
+    <string name="remote_stop">Engine Stop</string>
+    <string name="doors_locked">Doors Locked</string>
+    <string name="doors_unlocked">Doors Unlocked</string>
+    <string name="tire_pressure_title">Tire Pressure (TPMS)</string>
+    <string name="battery_health_title">12V Battery Health</string>
+    <string name="geofencing_alert_title">Geofence Alert</string>
+    <string name="security_biometric_required">Biometric authentication required</string>
+</resources>
