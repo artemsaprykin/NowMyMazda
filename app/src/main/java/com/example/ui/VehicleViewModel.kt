@@ -25,7 +25,8 @@ enum class VehicleNavTab {
     DIAGNOSTICS,
     LOCATE,
     TRIPS,
-    SETTINGS
+    SETTINGS,
+    CONNECTION
 }
 
 enum class TripSortOption(val displayName: String) {
@@ -158,24 +159,32 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
         repository.calibrateTpms()
     }
 
-    fun simulateTirePressureLeak() {
-        repository.simulateTirePressureLeak()
+    fun requestTpmsDiagnosticScan() {
+        repository.requestTpmsDiagnosticScan()
     }
 
-    fun simulateBatteryDrain() {
-        repository.simulateBatteryDrain()
+    fun runBatteryLoadTest() {
+        repository.runBatteryLoadTest()
     }
 
-    fun restoreHealthyBattery() {
-        repository.restoreHealthyBattery()
+    fun runDtcDiagnosticScan() {
+        repository.runDiagnosticTroubleCodeScan()
+    }
+
+    fun clearDtcCodes() {
+        repository.clearDiagnosticTroubleCodes()
+    }
+
+    fun refreshVehicleGpsLocation() {
+        repository.refreshVehicleGpsLocation()
     }
 
     fun setSafeZoneCurrent() {
         repository.setVehicleLocationAsSafeZone()
     }
 
-    fun simulateGeofenceBreach() {
-        repository.simulateGeofenceBreach()
+    fun updateVehicleLocationFromGps(lat: Double, lng: Double) {
+        repository.updateVehicleLocationFromGps(lat, lng)
     }
 
     fun requestDismissTheftAlarm() {
@@ -295,6 +304,23 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
 
     fun setThemeMode(mode: com.example.ui.theme.ThemeMode) {
         _themeMode.value = mode
+    }
+
+    fun authenticateMcsBridge(
+        email: String,
+        pass: String,
+        region: String,
+        vin: String?,
+        onComplete: (Boolean, String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val res = repository.authenticateMcsBridge(email, pass, region, vin)
+            if (res.isSuccess) {
+                onComplete(true, res.getOrNull() ?: "Connected to Mazda Connected Services.")
+            } else {
+                onComplete(false, res.exceptionOrNull()?.message ?: "Failed to authenticate.")
+            }
+        }
     }
 
     fun linkMyMazdaAccount(email: String, vin: String, region: String) {

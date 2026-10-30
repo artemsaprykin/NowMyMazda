@@ -94,11 +94,12 @@ fun DashboardScreen(
     onPanicHorn: () -> Unit,
     onTrunkToggle: () -> Unit,
     onCalibrateTpms: () -> Unit,
-    onSimulateTireLeak: () -> Unit,
+    onScanTpmsSensor: () -> Unit,
     onSyncCloud: () -> Unit,
     onSaveCloudConfig: (String, String) -> Unit,
     onLinkMyMazda: (String, String, String) -> Unit = { _, _, _ -> },
     onPairWithInCarCode: (String) -> Unit = {},
+    onNavigateToConnection: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTire by remember { mutableStateOf<TireInfo?>(null) }
@@ -126,7 +127,7 @@ fun DashboardScreen(
                 border = androidx.compose.foundation.BorderStroke(1.dp, colors.border),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { showMyMazdaDialog = true }
+                    .clickable { onNavigateToConnection() }
                     .testTag("cloud_status_banner")
             ) {
                 Row(
@@ -546,7 +547,7 @@ fun DashboardScreen(
         TireDetailDialog(
             tire = tire,
             onCalibrate = onCalibrateTpms,
-            onSimulateLeak = onSimulateTireLeak,
+            onScanSensor = onScanTpmsSensor,
             onDismiss = { selectedTire = null }
         )
     }

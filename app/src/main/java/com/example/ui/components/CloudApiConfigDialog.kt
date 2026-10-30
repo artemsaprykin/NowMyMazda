@@ -1,11 +1,14 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -80,6 +83,26 @@ fun CloudApiConfigDialog(
                         .fillMaxWidth()
                         .testTag("api_url_input")
                 )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = { apiUrl = "https://connected-api.mazda.cloud/v2/telematics" },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Mazda MNAO", fontSize = 11.sp, color = colors.textPrimary)
+                    }
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = { apiUrl = "http://10.0.2.2:8080/v2/telematics" },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("cv/mcs Bridge", fontSize = 11.sp, color = colors.textPrimary)
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(10.dp))
 

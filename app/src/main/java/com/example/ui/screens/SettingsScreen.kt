@@ -84,6 +84,7 @@ fun SettingsScreen(
     onUpdateSecurityConfig: (BiometricSecurityConfig) -> Unit,
     onSaveCloudConfig: (String, String) -> Unit,
     onSyncCloud: () -> Unit,
+    onNavigateToConnection: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = AppTheme.colors

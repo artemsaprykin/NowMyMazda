@@ -86,7 +86,9 @@ data class DiagnosticStatus(
     val brakePadsPercent: Int = 82,
     val brakeFluidOk: Boolean = true,
     val washerFluidLow: Boolean = false,
-    val activeDtcCodes: List<String> = emptyList()
+    val activeDtcCodes: List<String> = emptyList(),
+    val lastScanTimestamp: Long = System.currentTimeMillis(),
+    val scanStatusMessage: String = "All ECU modules report zero pending DTCs (Clean OBD-II Status)"
 )
 
 data class CloudApiConfig(
@@ -96,7 +98,12 @@ data class CloudApiConfig(
     val apiToken: String = "mzd_live_sec_892348a0f9b31",
     val lastSyncTimestamp: Long = System.currentTimeMillis(),
     val cellularSignalBars: Int = 4,
-    val isSyncing: Boolean = false
+    val isSyncing: Boolean = false,
+    val lastHttpCode: Int? = 200,
+    val lastLatencyMs: Long = 184,
+    val lastErrorMessage: String? = null,
+    val lastExecutedCommand: String? = "Telematics Polling (OK)",
+    val regionEndpoint: String = "North America (MNAO)"
 )
 
 data class ActiveDriveSession(
@@ -124,12 +131,19 @@ data class ActiveDriveSession(
 data class MyMazdaAccount(
     val email: String = "metra2007@meta.ua",
     val isLinked: Boolean = true,
-    val region: String = "North America (Mazda Connect USA)",
+    val region: String = "North America (MNAO)",
     val customerId: String = "MZD-8923019",
     val vehicleCount: Int = 1,
     val lastLoginTimestamp: Long = System.currentTimeMillis(),
     val isTcuPaired: Boolean = true,
-    val vehicleVin: String = "JM3KFBDM9P0128934"
+    val vehicleVin: String = "JM3KFBDM9P0128934",
+    val sessionToken: String = "mzd_live_sec_892348a0f9b31",
+    val tokenExpiresAt: Long = System.currentTimeMillis() + 86400_000L,
+    val remoteStartPermitted: Boolean = true,
+    val doorLockPermitted: Boolean = true,
+    val telematicsPermitted: Boolean = true,
+    val gpsTrackingPermitted: Boolean = true,
+    val dtcDiagnosticsPermitted: Boolean = true
 )
 
 data class VehicleState(

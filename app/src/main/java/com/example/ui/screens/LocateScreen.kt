@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -87,7 +88,7 @@ fun LocateScreen(
     onSetSafeZone: () -> Unit,
     onUpdateRadius: (Int) -> Unit,
     onToggleGeofence: (Boolean) -> Unit,
-    onSimulateBreach: () -> Unit,
+    onRefreshVehicleGps: () -> Unit,
     onDismissAlarm: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -573,14 +574,37 @@ fun LocateScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Simulation button for testing geofence alerts
-                    OutlinedButton(
-                        onClick = onSimulateBreach,
+                    Button(
+                        onClick = onRefreshVehicleGps,
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.surfaceElevated),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .testTag("simulate_breach_btn")
+                            .testTag("refresh_vehicle_gps_btn")
                     ) {
-                        Text("Simulate Geofence Breach (Trigger Theft Alarm)", color = DiagnosticAmber, fontSize = 12.sp)
+                        Icon(Icons.Default.Refresh, contentDescription = null, tint = colors.textPrimary, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Query Vehicle TCU for Live GPS Fix", color = colors.textPrimary, fontSize = 12.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    OutlinedButton(
+                        onClick = {
+                            LocationHelper.openNavigationDirections(
+                                context,
+                                vehicleState.location.latitude,
+                                vehicleState.location.longitude,
+                                vehicleState.nickname
+                            )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("open_maps_nav_btn")
+                    ) {
+                        Icon(Icons.Default.LocationOn, contentDescription = null, tint = ElectricCyan, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Open Navigation in Google Maps", color = colors.textPrimary, fontSize = 12.sp)
                     }
                 }
             }

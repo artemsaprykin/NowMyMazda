@@ -48,4 +48,52 @@ object LocationHelper {
         val bearing = Math.toDegrees(atan2(y, x))
         return ((bearing + 360) % 360).toFloat()
     }
+
+    /**
+     * Launches external GPS navigation (Google Maps / system navigator) to the vehicle location.
+     */
+    fun openNavigationDirections(context: android.content.Context, lat: Double, lng: Double, label: String = "Vehicle Location") {
+        try {
+            val uri = android.net.Uri.parse("geo:$lat,$lng?q=$lat,$lng(${android.net.Uri.encode(label)})")
+            val mapIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri).apply {
+                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(mapIntent)
+        } catch (e: Exception) {
+            // Fallback to web browser Google Maps
+            val webUri = android.net.Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$lat,$lng")
+            val webIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, webUri).apply {
+                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(webIntent)
+        }
+    }
+
+    /**
+     * Fetches current real hardware GPS coordinates using Google Play Services Fused Location.
+     */
+    fun fetchDeviceLocation(
+        context: android.content.Context,
+        onSuccess: (Double, Double) -> Unit,
+        onFailure: () -> Unit = {}
+    ) {
+        try {
+            val fusedLocationClient = com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(context)
+            fusedLocationClient.lastLocation
+                .addOnSuccessListener { loc ->
+                    if (loc != null) {
+                        onSuccess(loc.latitude, loc.longitude)
+                    } else {
+                        onFailure()
+                    }
+                }
+                .addOnFailureListener {
+                    onFailure()
+                }
+        } catch (_: SecurityException) {
+            onFailure()
+        } catch (_: Exception) {
+            onFailure()
+        }
+    }
 }

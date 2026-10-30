@@ -48,7 +48,41 @@ data class CloudTelematicsDto(
     @Json(name = "active_dtc_codes") val dtcCodes: List<String> = emptyList()
 )
 
+data class McsAuthRequest(
+    @Json(name = "email") val email: String,
+    @Json(name = "password") val password: String,
+    @Json(name = "region") val region: String = "MNAO"
+)
+
+data class McsAuthResponse(
+    @Json(name = "access_token") val accessToken: String,
+    @Json(name = "token_type") val tokenType: String = "Bearer",
+    @Json(name = "expires_in") val expiresIn: Long = 86400,
+    @Json(name = "customer_id") val customerId: String? = null,
+    @Json(name = "user_id") val userId: String? = null,
+    @Json(name = "status") val status: String? = "AUTHENTICATED"
+)
+
+data class McsVehicleDto(
+    @Json(name = "vin") val vin: String,
+    @Json(name = "id") val id: Long? = null,
+    @Json(name = "model_name") val modelName: String? = null,
+    @Json(name = "year") val year: Int? = null,
+    @Json(name = "nickname") val nickname: String? = null,
+    @Json(name = "connected_services_active") val connectedServicesActive: Boolean = true
+)
+
 interface ConnectedVehicleApiService {
+    @POST("auth/login")
+    suspend fun loginWithMcsCredentials(
+        @Body request: McsAuthRequest
+    ): Response<McsAuthResponse>
+
+    @GET("vehicles")
+    suspend fun getVehiclesList(
+        @Header("Authorization") token: String
+    ): Response<List<McsVehicleDto>>
+
     @POST("control/execute")
     suspend fun executeControlCommand(
         @Header("Authorization") token: String,
@@ -60,6 +94,23 @@ interface ConnectedVehicleApiService {
         @Header("Authorization") token: String,
         @Path("vin") vin: String
     ): Response<CloudTelematicsDto>
+
+    @POST("diagnostics/scan/{vin}")
+    suspend fun runDiagnosticScan(
+        @Header("Authorization") token: String,
+        @Path("vin") vin: String
+    ): Response<RemoteControlResponse>
+
+    @POST("diagnostics/clear/{vin}")
+    suspend fun clearDtcCodes(
+        @Header("Authorization") token: String,
+        @Path("vin") vin: String
+    ): Response<RemoteControlResponse>
+
+    @GET("health")
+    suspend fun pingGateway(
+        @Header("Authorization") token: String
+    ): Response<RemoteControlResponse>
 }
 
 object ApiClient {

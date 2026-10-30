@@ -337,7 +337,7 @@ fun MainAppScreen(
                     onPanicHorn = { viewModel.panicHorn() },
                     onTrunkToggle = { viewModel.toggleTrunk() },
                     onCalibrateTpms = { viewModel.calibrateTpms() },
-                    onSimulateTireLeak = { viewModel.simulateTirePressureLeak() },
+                    onScanTpmsSensor = { viewModel.requestTpmsDiagnosticScan() },
                     onSyncCloud = { viewModel.syncCloudApi() },
                     onSaveCloudConfig = { url, token -> viewModel.updateCloudConfig(url, token) },
                     onLinkMyMazda = { email, vin, region -> viewModel.linkMyMazdaAccount(email, vin, region) },
@@ -349,9 +349,10 @@ fun MainAppScreen(
                     maintenanceReminders = maintenanceReminders,
                     onReminderToggle = { id, done -> viewModel.setReminderCompleted(id, done) },
                     onCalibrateTpms = { viewModel.calibrateTpms() },
-                    onSimulateTireLeak = { viewModel.simulateTirePressureLeak() },
-                    onSimulateBatteryDrain = { viewModel.simulateBatteryDrain() },
-                    onRestoreBattery = { viewModel.restoreHealthyBattery() }
+                    onRequestTpmsScan = { viewModel.requestTpmsDiagnosticScan() },
+                    onRunBatteryLoadTest = { viewModel.runBatteryLoadTest() },
+                    onRunDtcScan = { viewModel.runDtcDiagnosticScan() },
+                    onClearDtcCodes = { viewModel.clearDtcCodes() }
                 )
 
                 VehicleNavTab.LOCATE -> LocateScreen(
@@ -360,7 +361,7 @@ fun MainAppScreen(
                     onSetSafeZone = { viewModel.setSafeZoneCurrent() },
                     onUpdateRadius = { radius -> viewModel.updateGeofenceRadius(radius) },
                     onToggleGeofence = { enabled -> viewModel.toggleGeofence(enabled) },
-                    onSimulateBreach = { viewModel.simulateGeofenceBreach() },
+                    onRefreshVehicleGps = { viewModel.refreshVehicleGpsLocation() },
                     onDismissAlarm = { viewModel.requestDismissTheftAlarm() }
                 )
 

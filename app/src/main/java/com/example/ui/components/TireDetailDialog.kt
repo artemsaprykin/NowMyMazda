@@ -42,7 +42,7 @@ import com.example.ui.theme.SoulRedPrimary
 fun TireDetailDialog(
     tire: TireInfo,
     onCalibrate: () -> Unit,
-    onSimulateLeak: () -> Unit,
+    onScanSensor: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val colors = AppTheme.colors
@@ -154,12 +154,12 @@ fun TireDetailDialog(
 
                 OutlinedButton(
                     onClick = {
-                        onSimulateLeak()
+                        onScanSensor()
                         onDismiss()
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Simulate Slow Pressure Leak", color = DiagnosticAmber)
+                    Text("Query Live Wheel Sensor via Telematics", color = colors.textPrimary)
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))

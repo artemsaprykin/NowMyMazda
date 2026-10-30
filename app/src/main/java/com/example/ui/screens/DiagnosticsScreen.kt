@@ -78,9 +78,10 @@ fun DiagnosticsScreen(
     maintenanceReminders: List<MaintenanceEntity>,
     onReminderToggle: (Long, Boolean) -> Unit,
     onCalibrateTpms: () -> Unit,
-    onSimulateTireLeak: () -> Unit,
-    onSimulateBatteryDrain: () -> Unit,
-    onRestoreBattery: () -> Unit,
+    onRequestTpmsScan: () -> Unit,
+    onRunBatteryLoadTest: () -> Unit,
+    onRunDtcScan: () -> Unit,
+    onClearDtcCodes: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedTire by remember { mutableStateOf<TireInfo?>(null) }
@@ -229,26 +230,16 @@ fun DiagnosticsScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    Button(
+                        onClick = onRunBatteryLoadTest,
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.surfaceElevated),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("battery_load_test_btn")
                     ) {
-                        if (vehicleState.batteryHealth.voltage < 12.0) {
-                            Button(
-                                onClick = onRestoreBattery,
-                                colors = ButtonDefaults.buttonColors(containerColor = DiagnosticGreen),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Restore 12.6V Baseline")
-                            }
-                        } else {
-                            OutlinedButton(
-                                onClick = onSimulateBatteryDrain,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Simulate Low Battery (11.7V)", color = DiagnosticAmber, fontSize = 12.sp)
-                            }
-                        }
+                        Icon(Icons.Default.ElectricBolt, contentDescription = null, tint = ElectricCyan, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Run 12V Battery & Alternator Load Test", color = colors.textPrimary, fontSize = 12.sp)
                     }
                 }
             }
@@ -334,11 +325,16 @@ fun DiagnosticsScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    OutlinedButton(
-                        onClick = onSimulateTireLeak,
-                        modifier = Modifier.fillMaxWidth()
+                    Button(
+                        onClick = onRequestTpmsScan,
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.surfaceElevated),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("request_tpms_scan_btn")
                     ) {
-                        Text("Simulate FL Slow Puncture (Trigger Diagnostic Alert)", color = DiagnosticAmber, fontSize = 12.sp)
+                        Icon(Icons.Default.Refresh, contentDescription = null, tint = colors.textPrimary, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Request Live TPMS Diagnostic Scan from Vehicle", color = colors.textPrimary, fontSize = 12.sp)
                     }
                 }
             }
@@ -503,28 +499,23 @@ fun DiagnosticsScreen(
                         Spacer(modifier = Modifier.height(12.dp))
                     }
 
+                    Text(
+                        text = vehicleState.diagnostics.scanStatusMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = DiagnosticGreen,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
                     Button(
-                        onClick = {
-                            isRunningEcuScan = true
-                            scanSuccessMessage = null
-                            scope.launch {
-                                delay(1800)
-                                isRunningEcuScan = false
-                                scanSuccessMessage = "Scan Complete: All 24 Electronic Control Units healthy. 0 Diagnostic Trouble Codes (DTC)."
-                            }
-                        },
+                        onClick = onRunDtcScan,
                         colors = ButtonDefaults.buttonColors(containerColor = SoulRedPrimary),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("run_ecu_scan_btn")
                     ) {
-                        if (isRunningEcuScan) {
-                            CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Interrogating Vehicle Control Modules...")
-                        } else {
-                            Text("Run Full Vehicle System Diagnostics Scan")
-                        }
+                        Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Run Live OBD-II CAN Telematics Diagnostics Scan")
                     }
                 }
             }
@@ -539,7 +530,7 @@ fun DiagnosticsScreen(
         TireDetailDialog(
             tire = tire,
             onCalibrate = onCalibrateTpms,
-            onSimulateLeak = onSimulateTireLeak,
+            onScanSensor = onRequestTpmsScan,
             onDismiss = { selectedTire = null }
         )
     }

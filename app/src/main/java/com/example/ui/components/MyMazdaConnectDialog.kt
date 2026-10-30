@@ -473,6 +473,12 @@ fun MyMazdaConnectDialog(
                                 title = "Remote Start Safety Checklist",
                                 description = "For remote engine start to ignite: all doors and trunk must be closed and locked, vehicle must be in PARK (P), hood closed, and smart key fobs must NOT be left inside the vehicle."
                             )
+
+                            InstructionStep(
+                                stepNumber = 6,
+                                title = "cv/mcs Backend & Gateway Architecture",
+                                description = "Inspired by the open-source cv/mcs client: authentication uses your MyMazda credentials mapped to regional telematics clusters (MNAO for North America, MME for Europe, MJO for Japan). You can also run the cv/mcs Go bridge on your home server and point this app's API Gateway to your private instance for local smart-car automation."
+                            )
                         }
                     }
                 }

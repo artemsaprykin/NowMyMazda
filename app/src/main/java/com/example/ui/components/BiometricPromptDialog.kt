@@ -115,21 +115,37 @@ fun BiometricPromptDialog(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val activity = context as? android.app.Activity
+
                 if (!showPinInput) {
-                    // Biometric Sensor Touch Simulation
                     Box(
                         modifier = Modifier
                             .size(90.dp)
                             .clip(CircleShape)
                             .background(colors.surfaceElevated)
                             .border(2.dp, ElectricCyan.copy(alpha = 0.7f), CircleShape)
-                            .clickable { onBiometricSuccess() }
+                            .clickable {
+                                if (activity != null) {
+                                    com.example.util.BiometricAuthManager.authenticateWithSystemBiometrics(
+                                        activity = activity,
+                                        title = pendingAction.title,
+                                        subtitle = pendingAction.description,
+                                        onSuccess = onBiometricSuccess,
+                                        onError = { err ->
+                                            showPinInput = true
+                                        }
+                                    )
+                                } else {
+                                    onBiometricSuccess()
+                                }
+                            }
                             .testTag("biometric_fingerprint_touch"),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Fingerprint,
-                            contentDescription = "Fingerprint Sensor",
+                            contentDescription = "Device Biometric Sensor",
                             tint = ElectricCyan,
                             modifier = Modifier.size(54.dp)
                         )
@@ -138,7 +154,7 @@ fun BiometricPromptDialog(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
-                        text = "Touch sensor to authenticate",
+                        text = "Touch device fingerprint / face sensor",
                         style = MaterialTheme.typography.labelSmall,
                         color = colors.textPrimary
                     )
@@ -146,13 +162,27 @@ fun BiometricPromptDialog(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Button(
-                        onClick = onBiometricSuccess,
+                        onClick = {
+                            if (activity != null) {
+                                com.example.util.BiometricAuthManager.authenticateWithSystemBiometrics(
+                                    activity = activity,
+                                    title = pendingAction.title,
+                                    subtitle = pendingAction.description,
+                                    onSuccess = onBiometricSuccess,
+                                    onError = { err ->
+                                        showPinInput = true
+                                    }
+                                )
+                            } else {
+                                onBiometricSuccess()
+                            }
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = SoulRedPrimary),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("biometric_confirm_button")
                     ) {
-                        Text("Confirm with Biometrics")
+                        Text("Authenticate with Android Biometrics")
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))

@@ -146,5 +146,26 @@ class ExampleRobolectricTest {
     assertTrue(darkColors.surface != lightColors.surface)
     assertTrue(darkColors.textPrimary != lightColors.textPrimary)
   }
+
+  @Test
+  fun `verify RemoteControlRequest payload and action types`() {
+    val req = com.example.data.remote.RemoteControlRequest(
+      vin = "JM3KFBDM9P0128934",
+      action = "START_ENGINE",
+      durationMinutes = 15,
+      climateTempF = 72
+    )
+    assertEquals("JM3KFBDM9P0128934", req.vin)
+    assertEquals("START_ENGINE", req.action)
+    assertEquals(15, req.durationMinutes)
+    assertEquals(72, req.climateTempF)
+  }
+
+  @Test
+  fun `verify clean OBD2 DTC status baseline`() {
+    val state = VehicleState()
+    assertTrue("Zero active DTC codes initially", state.diagnostics.activeDtcCodes.isEmpty())
+    assertEquals(false, state.diagnostics.checkEngineOn)
+  }
 }
 
