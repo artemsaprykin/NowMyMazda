@@ -426,19 +426,19 @@ fun VehicleTopDownView(
                 StatusMetricPill(
                     icon = Icons.Default.BatteryChargingFull,
                     label = "12V Battery",
-                    value = "${vehicleState.batteryHealth.voltage}V",
-                    color = if (vehicleState.batteryHealth.voltage >= 12.2) DiagnosticGreen else DiagnosticAmber
+                    value = if (vehicleState.batteryHealth.isAvailable) "${vehicleState.batteryHealth.voltage}V" else "Unavailable",
+                    color = if (vehicleState.batteryHealth.isAvailable && vehicleState.batteryHealth.voltage >= 12.2) DiagnosticGreen else DiagnosticAmber
                 )
                 StatusMetricPill(
                     icon = Icons.Default.Warning,
                     label = "Oil Life",
-                    value = "${vehicleState.diagnostics.oilLifePercent}%",
-                    color = if (vehicleState.diagnostics.oilLifePercent > 20) ElectricCyan else DiagnosticAmber
+                    value = if (vehicleState.diagnostics.isAvailable) "${vehicleState.diagnostics.oilLifePercent}%" else "Unavailable",
+                    color = if (vehicleState.diagnostics.isAvailable && vehicleState.diagnostics.oilLifePercent > 20) ElectricCyan else DiagnosticAmber
                 )
                 StatusMetricPill(
                     icon = null,
                     label = "Est. Range",
-                    value = "${vehicleState.estimatedRangeMiles} mi",
+                    value = if (vehicleState.isFuelAvailable) "${vehicleState.estimatedRangeMiles} mi" else "Unavailable",
                     color = colors.textPrimary
                 )
             }
@@ -452,13 +452,13 @@ fun TirePressureBadge(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val colors = com.example.ui.theme.AppTheme.colors
     val statusColor = when (tire.status) {
         PressureStatus.NORMAL -> DiagnosticGreen
         PressureStatus.LOW -> DiagnosticAmber
         PressureStatus.CRITICAL -> DiagnosticRed
+        PressureStatus.UNKNOWN -> colors.textSecondary
     }
-
-    val colors = com.example.ui.theme.AppTheme.colors
 
     Surface(
         modifier = modifier

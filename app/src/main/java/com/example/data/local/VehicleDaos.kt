@@ -9,6 +9,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TripLogDao {
+    @Query("SELECT * FROM trip_logs ORDER BY startTimeMillis DESC")
+    fun getAllTrips(): Flow<List<TripLogEntity>>
+
     @Query("SELECT * FROM trip_logs WHERE vin = :vin ORDER BY startTimeMillis DESC")
     fun getTripsForVin(vin: String): Flow<List<TripLogEntity>>
 

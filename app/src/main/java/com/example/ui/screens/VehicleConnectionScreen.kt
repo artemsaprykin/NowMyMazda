@@ -1,9 +1,7 @@
 package com.example.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +27,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Speed
@@ -64,6 +63,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.DiscoveredVehicle
@@ -82,7 +82,7 @@ fun VehicleConnectionScreen(
     vehicleState: VehicleState,
     onAuthenticate: (email: String, pass: String, region: String, customUrl: String?, onComplete: (Boolean, String) -> Unit) -> Unit,
     onSelectVehicle: (vin: String) -> Unit,
-    onPairWithInCarCode: (code: String) -> Boolean,
+    onPairWithInCarCode: (code: String) -> Boolean = { false },
     onTestHandshake: (onResult: (String) -> Unit) -> Unit,
     onDisconnect: () -> Unit,
     onBack: () -> Unit,
@@ -96,7 +96,6 @@ fun VehicleConnectionScreen(
     var passwordInput by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var selectedRegion by remember { mutableStateOf(MazdaRegionalCluster.fromCode(account.regionCode)) }
-    var inCarCodeInput by remember { mutableStateOf("") }
     var customGatewayUrl by remember { mutableStateOf(cloudConfig.apiUrl) }
     var useCustomGateway by remember { mutableStateOf(false) }
 
@@ -149,19 +148,20 @@ fun VehicleConnectionScreen(
 
         // Live Connection Status Hero Banner
         item {
+            val isConnected = account.isLinked && vehicleState.isVehicleSelected
             Card(
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (account.isLinked) colors.surface else Color(0xFF1E1417)
+                    containerColor = if (isConnected) colors.surface else Color(0xFF1E1417)
                 ),
                 border = CardDefaults.outlinedCardBorder().copy(
                     brush = androidx.compose.ui.graphics.SolidColor(
-                        if (account.isLinked) DiagnosticGreen.copy(alpha = 0.5f) else SoulRedPrimary.copy(alpha = 0.6f)
+                        if (isConnected) DiagnosticGreen.copy(alpha = 0.5f) else SoulRedPrimary.copy(alpha = 0.6f)
                     )
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("connection_status_hero")
+                    .testTag("connection_hero_banner")
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Row(
@@ -172,28 +172,46 @@ fun VehicleConnectionScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
-                                    .size(10.dp)
+                                    .size(44.dp)
                                     .clip(CircleShape)
-                                    .background(if (account.isLinked) DiagnosticGreen else DiagnosticAmber)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = if (account.isLinked) "Connected to Mazda Cloud" else "Ready to Link Account",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.textPrimary
-                            )
+                                    .background(
+                                        if (isConnected) DiagnosticGreen.copy(alpha = 0.2f)
+                                        else SoulRedDark.copy(alpha = 0.4f)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isConnected) Icons.Default.CloudDone else Icons.Default.CloudOff,
+                                    contentDescription = null,
+                                    tint = if (isConnected) DiagnosticGreen else SoulRedLight,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = if (isConnected) "Connected to Mazda Cloud" else "Disconnected",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.textPrimary
+                                )
+                                Text(
+                                    text = if (isConnected) "Active Gateway: ${cloudConfig.regionEndpoint}" else "No active Mazda Connected Services session",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (isConnected) DiagnosticGreen else colors.textSecondary
+                                )
+                            }
                         }
 
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = colors.surfaceElevated
+                            color = if (isConnected) Color(0xFF142B1F) else Color(0xFF2C191B)
                         ) {
                             Text(
-                                text = selectedRegion.code,
+                                text = if (isConnected) "LIVE UPLINK" else "OFFLINE",
+                                color = if (isConnected) DiagnosticGreen else SoulRedLight,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = SoulRedLight,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                             )
                         }
@@ -202,10 +220,10 @@ fun VehicleConnectionScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = if (account.isLinked) {
-                            "Authenticated as ${account.email} • VIN: ${vehicleState.vin} • Telematics Uplink: Active (${cloudConfig.lastLatencyMs}ms)"
+                        text = if (isConnected) {
+                            "Authenticated as ${account.email} • Active VIN: ${vehicleState.vin} • Telematics Status: Verified"
                         } else {
-                            "Connect your existing MyMazda account to enable remote engine ignition, door locks, TPMS telemetry, and GPS tracking."
+                            "Connect your existing MyMazda account to enable remote engine start, door lock actuation, TPMS telemetry, and GPS tracking."
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.textSecondary
@@ -240,7 +258,7 @@ fun VehicleConnectionScreen(
                                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp), tint = colors.textPrimary)
                             }
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Test Gateway Handshake", fontSize = 11.sp, color = colors.textPrimary)
+                            Text("Test Gateway Ping", fontSize = 11.sp, color = colors.textPrimary)
                         }
 
                         if (account.isLinked) {
@@ -248,7 +266,7 @@ fun VehicleConnectionScreen(
                                 onClick = onDisconnect,
                                 modifier = Modifier.testTag("disconnect_account_btn")
                             ) {
-                                Text("Unlink", fontSize = 11.sp, color = DiagnosticAmber)
+                                Text("Sign Out", fontSize = 11.sp, color = DiagnosticAmber)
                             }
                         }
                     }
@@ -258,7 +276,7 @@ fun VehicleConnectionScreen(
                         Text(
                             text = msg,
                             fontSize = 11.sp,
-                            color = DiagnosticGreen,
+                            color = if (msg.contains("OK")) DiagnosticGreen else DiagnosticAmber,
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -278,25 +296,20 @@ fun VehicleConnectionScreen(
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Text(
-                        text = "Link Existing MyMazda Account",
+                        text = "Link MyMazda Credentials",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = colors.textPrimary
                     )
                     Text(
-                        text = "Authenticates directly with Mazda Connected Services using RSA public key client-side encryption (compatible with cv/mcs & pymazda).",
+                        text = "Your password is encrypted client-side using dynamic RSA-2048 public key before transmission.",
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.textSecondary,
-                        modifier = Modifier.padding(top = 2.dp, bottom = 14.dp)
+                        modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
                     )
 
-                    // Region Selector Chips
-                    Text(
-                        text = "Select Mazda Regional Server Cluster:",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colors.textPrimary
-                    )
+                    // Region Selector
+                    Text("Regional Cloud Cluster:", style = MaterialTheme.typography.labelSmall, color = colors.textSecondary)
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -428,19 +441,22 @@ fun VehicleConnectionScreen(
 
                     Button(
                         onClick = {
-                            if (emailInput.isNotBlank()) {
-                                isConnecting = true
-                                connectionFeedback = null
-                                onAuthenticate(
-                                    emailInput,
-                                    passwordInput.ifBlank { "saved_key_token" },
-                                    selectedRegion.code,
-                                    if (useCustomGateway) customGatewayUrl else null
-                                ) { success, msg ->
-                                    isConnecting = false
-                                    isFeedbackError = !success
-                                    connectionFeedback = msg
-                                }
+                            if (emailInput.isBlank() || passwordInput.isBlank()) {
+                                isFeedbackError = true
+                                connectionFeedback = "Please enter both your MyMazda account email and password."
+                                return@Button
+                            }
+                            isConnecting = true
+                            connectionFeedback = null
+                            onAuthenticate(
+                                emailInput.trim(),
+                                passwordInput,
+                                selectedRegion.code,
+                                if (useCustomGateway) customGatewayUrl.trim() else null
+                            ) { success, msg ->
+                                isConnecting = false
+                                isFeedbackError = !success
+                                connectionFeedback = msg
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = SoulRedPrimary),
@@ -491,7 +507,7 @@ fun VehicleConnectionScreen(
                                 color = colors.textPrimary
                             )
                             Text(
-                                text = "${account.discoveredVehicles.size} vehicle(s) linked to ${account.email}",
+                                text = if (account.isLinked) "${account.discoveredVehicles.size} vehicle(s) linked to ${account.email}" else "No account currently linked",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = colors.textSecondary
                             )
@@ -502,13 +518,40 @@ fun VehicleConnectionScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    account.discoveredVehicles.forEach { vehicle ->
-                        VehicleItemRow(
-                            vehicle = vehicle,
-                            onSelect = { onSelectVehicle(vehicle.vin) },
-                            colors = colors
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
+                    if (account.discoveredVehicles.isEmpty()) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = colors.surfaceElevated,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "No Vehicles Discovered",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.textPrimary
+                                )
+                                Text(
+                                    text = "Authenticate your MyMazda account above to retrieve your registered Mazda vehicles.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colors.textSecondary,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        account.discoveredVehicles.forEach { vehicle ->
+                            VehicleItemRow(
+                                vehicle = vehicle,
+                                onSelect = { onSelectVehicle(vehicle.vin) },
+                                colors = colors
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
                     }
                 }
             }
@@ -538,13 +581,13 @@ fun VehicleConnectionScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "Required Permissions to Enable Remote Control",
+                                text = "Required Telematics Permissions",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = colors.textPrimary
                             )
                             Text(
-                                text = "All 4 permissions must be satisfied for remote ignition and lock actuation.",
+                                text = "Prerequisites verified against Mazda cloud for remote commands.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = colors.textSecondary
                             )
@@ -564,7 +607,7 @@ fun VehicleConnectionScreen(
 
                     PermissionCheckItem(
                         title = "2. Connected Services Remote Control Entitlement",
-                        description = "Requires active 3-year complimentary trial or Connected Services enrollment on your MyMazda account.",
+                        description = "Requires active Connected Services subscription on your MyMazda account.",
                         isGranted = account.remoteControlEntitlementActive,
                         colors = colors
                     )
@@ -572,8 +615,8 @@ fun VehicleConnectionScreen(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     PermissionCheckItem(
-                        title = "3. TCU 4G LTE Modem & 6-Digit In-Car PIN",
-                        description = "Telematics Control Unit must complete a one-time 6-digit confirmation handshake displayed on your in-car screen.",
+                        title = "3. TCU 4G LTE Modem Cellular Reception",
+                        description = "Telematics Control Unit must have active cellular signal bars and be registered in Mazda cloud.",
                         isGranted = account.inCarVerificationCompleted,
                         colors = colors
                     )
@@ -582,7 +625,7 @@ fun VehicleConnectionScreen(
 
                     PermissionCheckItem(
                         title = "4. Vehicle CAN-Bus Remote Start Safety Interlocks",
-                        description = "Transmission must be in PARK (P), all doors/trunk closed, hood latch closed, and smart key fobs outside cabin.",
+                        description = "Transmission in PARK (P), all doors/trunk closed, hood closed, and fobs outside cabin.",
                         isGranted = account.safetyInterlocksClear,
                         colors = colors
                     )
@@ -590,7 +633,7 @@ fun VehicleConnectionScreen(
             }
         }
 
-        // In-Car 6-Digit Verification PIN Handshake Section
+        // In-Vehicle Connectivity & Telematics Verification Prerequisite
         item {
             Card(
                 shape = RoundedCornerShape(20.dp),
@@ -601,89 +644,63 @@ fun VehicleConnectionScreen(
                     .testTag("in_car_handshake_card")
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "In-Car Telematics Handshake (6-Digit PIN)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.textPrimary
-                    )
-                    Text(
-                        text = "If pairing a new mobile device to your Mazda, sit in the driver seat, turn ignition ON, and navigate to Connected Services pairing.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.textSecondary,
-                        modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
-                    )
-
-                    // Simulated in-car screen display mockup
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFF0F141C),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, SoulRedLight.copy(alpha = 0.5f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("MAZDA CONNECT™ TCU 4G LTE", color = Color(0xFF94A3B8), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                Text("ANTENNA SIGNAL: 4/4 BARS", color = DiagnosticGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(SoulRedDark.copy(alpha = 0.3f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.DirectionsCar, contentDescription = null, tint = SoulRedLight, modifier = Modifier.size(20.dp))
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
                             Text(
-                                text = "Settings > Connectivity > Connected Services > Pair Mobile Device",
-                                color = ElectricCyan,
-                                fontSize = 11.sp
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "Verification Pairing Code:",
-                                color = Color.White,
-                                style = MaterialTheme.typography.bodySmall
+                                text = "In-Vehicle Mazda Connect™ Pairing",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.textPrimary
                             )
                             Text(
-                                text = "591 - 824",
-                                color = SoulRedLight,
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 2.sp
+                                text = "Authentic cloud enrollment and in-car configuration",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.textSecondary
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = colors.surfaceElevated,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        OutlinedTextField(
-                            value = inCarCodeInput,
-                            onValueChange = { if (it.length <= 6) inCarCodeInput = it },
-                            placeholder = { Text("Enter 6 digits (591824)") },
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = colors.textPrimary,
-                                unfocusedTextColor = colors.textPrimary,
-                                focusedBorderColor = SoulRedPrimary,
-                                unfocusedBorderColor = colors.border
-                            ),
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("in_car_code_input")
-                        )
-
-                        Button(
-                            onClick = {
-                                if (inCarCodeInput.length == 6) {
-                                    onPairWithInCarCode(inCarCodeInput)
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = SoulRedPrimary),
-                            modifier = Modifier.testTag("submit_in_car_code_btn")
-                        ) {
-                            Text("Verify Code")
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Text(
+                                text = "1. Turn on vehicle ignition (engine off is fine).",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.textPrimary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "2. On the center display, open Settings > Connectivity Settings > Connected Services.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.textPrimary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "3. Confirm 'Data Sharing' is toggled ON to permit TCU telematics transmission.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.textPrimary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "4. If prompted with an in-car confirmation prompt, accept it to enroll this device.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.textPrimary
+                            )
                         }
                     }
                 }
@@ -717,34 +734,34 @@ fun VehicleConnectionScreen(
                     ConnectionStepItem(
                         stepNum = "1",
                         title = "Verify MyMazda Account & VIN Enrollment",
-                        description = "Make sure your car is enrolled in the official MyMazda mobile app. Your 17-digit VIN is located on the driver door sticker or windshield lower corner.",
+                        description = "Make sure your car is enrolled in your MyMazda account. Your 17-digit VIN is located on the driver door sticker or windshield lower corner.",
                         colors = colors
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     ConnectionStepItem(
                         stepNum = "2",
-                        title = "Enable In-Vehicle Data Sharing",
-                        description = "In the car, turn ignition ON. On the center display rotary dial: Settings > In-Vehicle Displays > Connectivity Settings > Connected Services, and toggle 'Data Sharing' to ON.",
+                        title = "Enable In-Car Data Sharing",
+                        description = "In your vehicle, navigate to Mazda Connect™ Settings > Connectivity Settings > Connected Services and verify Data Sharing is enabled.",
                         colors = colors
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     ConnectionStepItem(
                         stepNum = "3",
-                        title = "Select Regional Server Cluster",
-                        description = "Select your vehicle's market (MNAO for USA/Canada, MME for Europe, MJO for Japan). The app queries the regional auth server and encrypts credentials with an RSA public key.",
+                        title = "Select Regional Cluster (MNAO / MME / MJO)",
+                        description = "Select MNAO for US/Canada, MME for Europe, or MJO for Japan. If you run a local cv/mcs daemon or Home Assistant proxy, select BRIDGE.",
                         colors = colors
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     ConnectionStepItem(
                         stepNum = "4",
-                        title = "cv/mcs & Home Assistant Local Bridge (Optional)",
-                        description = "If you host the cv/mcs Go binary or Home Assistant on your home network, enter the local proxy URL (e.g. http://10.0.2.2:8080/api/) to bypass regional rate limits.",
+                        title = "Connect & Select Active Vehicle",
+                        description = "Enter your credentials above. All vehicles linked to your Mazda account will be discovered automatically with full remote control capabilities.",
                         colors = colors
                     )
                 }
@@ -758,7 +775,7 @@ fun VehicleConnectionScreen(
 }
 
 @Composable
-private fun VehicleItemRow(
+fun VehicleItemRow(
     vehicle: DiscoveredVehicle,
     onSelect: () -> Unit,
     colors: com.example.ui.theme.AppColors
@@ -767,75 +784,85 @@ private fun VehicleItemRow(
         shape = RoundedCornerShape(12.dp),
         color = if (vehicle.isSelected) SoulRedDark.copy(alpha = 0.25f) else colors.surfaceElevated,
         border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            if (vehicle.isSelected) SoulRedPrimary else colors.border
+            width = if (vehicle.isSelected) 1.5.dp else 1.dp,
+            color = if (vehicle.isSelected) SoulRedPrimary else colors.border
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onSelect() }
             .testTag("vehicle_row_${vehicle.vin}")
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier
+                .padding(12.dp)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(if (vehicle.isSelected) SoulRedPrimary else colors.surface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DirectionsCar,
+                        contentDescription = null,
+                        tint = if (vehicle.isSelected) Color.White else colors.textSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
                     Text(
-                        text = vehicle.nickname,
+                        text = "${if (vehicle.modelYear > 0) vehicle.modelYear else ""} ${vehicle.modelName}".trim(),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = colors.textPrimary
                     )
-                    if (vehicle.isSelected) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = SoulRedPrimary
-                        ) {
-                            Text(
-                                text = "ACTIVE",
-                                color = Color.White,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Black,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(2.dp))
-
-                Text(
-                    text = "${vehicle.modelYear} ${vehicle.modelName} • VIN: ${vehicle.vin}",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontSize = 11.sp,
-                    color = colors.textSecondary
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(if (vehicle.isTcuPaired) DiagnosticGreen else DiagnosticAmber)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (vehicle.isTcuPaired) "TCU 4G LTE Paired • Remote Control Active" else "TCU Unpaired",
-                        fontSize = 10.sp,
-                        color = if (vehicle.isTcuPaired) DiagnosticGreen else DiagnosticAmber
+                        text = "VIN: ${vehicle.vin}",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontSize = 11.sp,
+                        color = colors.textSecondary
                     )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = if (vehicle.isTcuPaired) "TCU: Paired" else "TCU: Ready",
+                            fontSize = 10.sp,
+                            color = DiagnosticGreen,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (vehicle.canRemoteControl) "Remote: Enabled" else "Remote: Standard",
+                            fontSize = 10.sp,
+                            color = ElectricCyan,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
 
-            if (!vehicle.isSelected) {
-                OutlinedButton(
+            if (vehicle.isSelected) {
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = SoulRedPrimary
+                ) {
+                    Text(
+                        text = "ACTIVE",
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            } else {
+                Button(
                     onClick = onSelect,
-                    modifier = Modifier.padding(start = 8.dp)
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.surface),
+                    modifier = Modifier.testTag("select_vehicle_${vehicle.vin}")
                 ) {
                     Text("Select", fontSize = 11.sp, color = colors.textPrimary)
                 }
@@ -845,7 +872,7 @@ private fun VehicleItemRow(
 }
 
 @Composable
-private fun PermissionCheckItem(
+fun PermissionCheckItem(
     title: String,
     description: String,
     isGranted: Boolean,
@@ -857,42 +884,38 @@ private fun PermissionCheckItem(
     ) {
         Box(
             modifier = Modifier
-                .size(24.dp)
+                .size(22.dp)
                 .clip(CircleShape)
-                .background(if (isGranted) DiagnosticGreen.copy(alpha = 0.2f) else DiagnosticAmber.copy(alpha = 0.2f)),
+                .background(if (isGranted) DiagnosticGreen else Color(0xFF2C241E)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = if (isGranted) Icons.Default.Check else Icons.Default.Info,
+                imageVector = if (isGranted) Icons.Default.Check else Icons.Default.Lock,
                 contentDescription = null,
-                tint = if (isGranted) DiagnosticGreen else DiagnosticAmber,
-                modifier = Modifier.size(16.dp)
+                tint = if (isGranted) Color.White else DiagnosticAmber,
+                modifier = Modifier.size(14.dp)
             )
         }
-
         Spacer(modifier = Modifier.width(10.dp))
-
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
                 color = colors.textPrimary
             )
-            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.textSecondary,
-                fontSize = 11.sp,
-                lineHeight = 15.sp
+                fontSize = 11.sp
             )
         }
     }
 }
 
 @Composable
-private fun ConnectionStepItem(
+fun ConnectionStepItem(
     stepNum: String,
     title: String,
     description: String,
@@ -904,9 +927,9 @@ private fun ConnectionStepItem(
     ) {
         Box(
             modifier = Modifier
-                .size(26.dp)
+                .size(24.dp)
                 .clip(CircleShape)
-                .background(SoulRedPrimary),
+                .background(SoulRedDark),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -916,23 +939,19 @@ private fun ConnectionStepItem(
                 fontSize = 12.sp
             )
         }
-
-        Spacer(modifier = Modifier.width(12.dp))
-
+        Spacer(modifier = Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
                 color = colors.textPrimary
             )
-            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.textSecondary,
-                fontSize = 11.sp,
-                lineHeight = 16.sp
+                fontSize = 11.sp
             )
         }
     }

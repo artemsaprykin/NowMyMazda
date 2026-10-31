@@ -50,6 +50,7 @@ fun TireDetailDialog(
         PressureStatus.NORMAL -> DiagnosticGreen
         PressureStatus.LOW -> DiagnosticAmber
         PressureStatus.CRITICAL -> DiagnosticRed
+        PressureStatus.UNKNOWN -> colors.textSecondary
     }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -96,6 +97,7 @@ fun TireDetailDialog(
                         PressureStatus.NORMAL -> "Optimal Pressure Verified"
                         PressureStatus.LOW -> "Low Pressure Warning"
                         PressureStatus.CRITICAL -> "Critical Pressure Alert"
+                        PressureStatus.UNKNOWN -> "Pressure Telematics Unavailable"
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = statusColor

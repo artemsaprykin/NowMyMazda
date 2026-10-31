@@ -8,22 +8,21 @@ data class BiometricSecurityConfig(
     val requireForDoorUnlock: Boolean = true,
     val requireForTheftAlarm: Boolean = true,
     val requireForAppLaunch: Boolean = false,
-    val userPin: String = "1920"
+    val hasConfiguredPin: Boolean = false
 )
 
 object BiometricAuthManager {
     fun hasBiometricHardware(context: Context): Boolean {
-        // Safe check for fingerprint / biometric sensor availability
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             try {
                 val fingerprintManager = context.getSystemService(Context.FINGERPRINT_SERVICE)
                 val method = fingerprintManager?.javaClass?.getMethod("isHardwareDetected")
-                (method?.invoke(fingerprintManager) as? Boolean) ?: true
+                (method?.invoke(fingerprintManager) as? Boolean) ?: false
             } catch (_: Exception) {
-                true
+                false
             }
         } else {
-            true
+            false
         }
     }
 
@@ -57,7 +56,7 @@ object BiometricAuthManager {
                     override fun onAuthenticationFailed() {
                         super.onAuthenticationFailed()
                         activity.runOnUiThread {
-                            onError("Fingerprint/Face not recognized. Please try again.")
+                            onError("Fingerprint or Face biometric not recognized.")
                         }
                     }
                 }

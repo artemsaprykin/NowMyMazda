@@ -570,6 +570,7 @@ fun TireCard(
         PressureStatus.NORMAL -> DiagnosticGreen
         PressureStatus.LOW -> DiagnosticAmber
         PressureStatus.CRITICAL -> DiagnosticRed
+        PressureStatus.UNKNOWN -> colors.textSecondary
     }
 
     Surface(

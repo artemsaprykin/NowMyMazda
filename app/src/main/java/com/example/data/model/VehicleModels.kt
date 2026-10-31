@@ -9,41 +9,47 @@ enum class EngineState {
 
 enum class LockState {
     LOCKED,
-    UNLOCKED
+    UNLOCKED,
+    UNKNOWN
 }
 
 enum class PressureStatus {
     NORMAL,
     LOW,
-    CRITICAL
+    CRITICAL,
+    UNKNOWN
 }
 
 data class TireInfo(
     val id: String,
     val name: String,
-    val currentPsi: Double,
+    val currentPsi: Double = 0.0,
     val recommendedPsi: Double = 36.0,
-    val tempF: Int = 74,
-    val status: PressureStatus = PressureStatus.NORMAL
+    val tempF: Int = 0,
+    val status: PressureStatus = PressureStatus.UNKNOWN,
+    val isAvailable: Boolean = false
 )
 
 data class TPMSData(
-    val frontLeft: TireInfo = TireInfo("FL", "Front Left", 36.0),
-    val frontRight: TireInfo = TireInfo("FR", "Front Right", 36.0),
-    val rearLeft: TireInfo = TireInfo("RL", "Rear Left", 36.0),
-    val rearRight: TireInfo = TireInfo("RR", "Rear Right", 35.5)
+    val isAvailable: Boolean = false,
+    val frontLeft: TireInfo = TireInfo("FL", "Front Left"),
+    val frontRight: TireInfo = TireInfo("FR", "Front Right"),
+    val rearLeft: TireInfo = TireInfo("RL", "Rear Left"),
+    val rearRight: TireInfo = TireInfo("RR", "Rear Right")
 )
 
 data class BatteryHealth(
-    val voltage: Double = 12.6,
-    val stateOfHealthPercent: Int = 96,
-    val stateOfChargePercent: Int = 88,
-    val temperatureF: Int = 72,
-    val alternatorStatus: String = "14.2V (Charging OK)",
-    val healthSummary: String = "Good Condition"
+    val isAvailable: Boolean = false,
+    val voltage: Double = 0.0,
+    val stateOfHealthPercent: Int = 0,
+    val stateOfChargePercent: Int = 0,
+    val temperatureF: Int = 0,
+    val alternatorStatus: String = "Unavailable",
+    val healthSummary: String = "No telemetry received"
 )
 
 data class DoorState(
+    val isAvailable: Boolean = false,
     val isDriverOpen: Boolean = false,
     val isPassengerOpen: Boolean = false,
     val isRearLeftOpen: Boolean = false,
@@ -57,75 +63,71 @@ data class RemoteStartSettings(
     val runDurationMinutes: Int = 15,
     val remainingSeconds: Int = 0,
     val targetTempF: Int = 72,
-    val heatedSeatsEnabled: Boolean = true,
-    val rearDefrostEnabled: Boolean = true
+    val heatedSeatsEnabled: Boolean = false,
+    val rearDefrostEnabled: Boolean = false
 )
 
 data class VehicleGpsLocation(
-    val latitude: Double = 47.6062,
-    val longitude: Double = -122.3321,
-    val address: String = "Pine St & 4th Ave, Seattle, WA",
-    val lastUpdatedTimestamp: Long = System.currentTimeMillis(),
+    val isAvailable: Boolean = false,
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
+    val address: String = "Location Unavailable",
+    val lastUpdatedTimestamp: Long? = null,
     val isParked: Boolean = true
 )
 
 data class GeofenceSettings(
-    val isEnabled: Boolean = true,
-    val centerLatitude: Double = 47.6062,
-    val centerLongitude: Double = -122.3321,
+    val isEnabled: Boolean = false,
+    val centerLatitude: Double = 0.0,
+    val centerLongitude: Double = 0.0,
     val radiusMeters: Int = 300,
-    val safeZoneName: String = "Home Garage",
+    val safeZoneName: String = "Safe Zone",
     val isBreached: Boolean = false,
     val theftAlarmActive: Boolean = false
 )
 
 data class DiagnosticStatus(
+    val isAvailable: Boolean = false,
     val checkEngineOn: Boolean = false,
-    val oilLifePercent: Int = 68,
-    val nextServiceMiles: Int = 3180,
-    val brakePadsPercent: Int = 82,
+    val oilLifePercent: Int = 0,
+    val nextServiceMiles: Int = 0,
+    val brakePadsPercent: Int = 0,
     val brakeFluidOk: Boolean = true,
     val washerFluidLow: Boolean = false,
     val activeDtcCodes: List<String> = emptyList(),
-    val lastScanTimestamp: Long = System.currentTimeMillis(),
-    val scanStatusMessage: String = "All ECU modules report zero pending DTCs (Clean OBD-II Status)"
+    val lastScanTimestamp: Long? = null,
+    val scanStatusMessage: String = "No cloud telematics report received"
 )
 
 data class CloudApiConfig(
-    val isConnected: Boolean = true,
-    val apiUrl: String = "https://connected-api.mazda.cloud/v2/telematics",
-    val vin: String = "JM3KFBDM9P0128934",
-    val apiToken: String = "mzd_live_sec_892348a0f9b31",
-    val lastSyncTimestamp: Long = System.currentTimeMillis(),
-    val cellularSignalBars: Int = 4,
+    val isConnected: Boolean = false,
+    val apiUrl: String = "https://app-api.mazdausa.com/",
+    val vin: String = "",
+    val apiToken: String = "",
+    val lastSyncTimestamp: Long = 0L,
+    val cellularSignalBars: Int = 0,
     val isSyncing: Boolean = false,
-    val lastHttpCode: Int? = 200,
-    val lastLatencyMs: Long = 184,
+    val lastHttpCode: Int? = null,
+    val lastLatencyMs: Long = 0L,
     val lastErrorMessage: String? = null,
-    val lastExecutedCommand: String? = "Telematics Polling (OK)",
+    val lastExecutedCommand: String? = null,
     val regionEndpoint: String = "North America (MNAO)"
 )
 
 data class ActiveDriveSession(
     val startTimeMillis: Long = System.currentTimeMillis(),
-    val startAddress: String = "Home Garage, Seattle",
-    val destinationAddress: String = "Bellevue Tech Center, WA",
+    val startAddress: String = "",
+    val destinationAddress: String = "",
     val currentDistanceMiles: Double = 0.0,
     val durationSeconds: Int = 0,
     val currentSpeedMph: Double = 0.0,
     val maxSpeedMph: Double = 0.0,
-    val instantMpg: Double = 28.5,
+    val instantMpg: Double = 0.0,
     val currentStepIndex: Int = 0,
-    val currentRouteLeg: String = "Departing origin",
-    val routeLegs: List<String> = listOf(
-        "Departing origin",
-        "Merging onto Interstate 5",
-        "Express lanes cruising",
-        "Exit 14 toward Bellevue Way",
-        "Arriving at destination"
-    ),
-    val drivingScore: Int = 95,
-    val tripTag: String = "Commute"
+    val currentRouteLeg: String = "",
+    val routeLegs: List<String> = emptyList(),
+    val drivingScore: Int = 100,
+    val tripTag: String = "General"
 )
 
 data class DiscoveredVehicle(
@@ -133,45 +135,55 @@ data class DiscoveredVehicle(
     val modelName: String,
     val modelYear: Int,
     val nickname: String,
-    val isTcuPaired: Boolean = true,
-    val canRemoteControl: Boolean = true,
+    val isTcuPaired: Boolean = false,
+    val canRemoteControl: Boolean = false,
     val isSelected: Boolean = false
 )
 
 data class MyMazdaAccount(
-    val email: String = "metra2007@meta.ua",
-    val isLinked: Boolean = true,
-    val region: String = "North America (MNAO - Mazda USA/Canada)",
+    val email: String = "",
+    val isLinked: Boolean = false,
+    val region: String = "North America (MNAO)",
     val regionCode: String = "MNAO",
-    val customerId: String = "MZD-8923019",
-    val vehicleCount: Int = 2,
-    val lastLoginTimestamp: Long = System.currentTimeMillis(),
-    val isTcuPaired: Boolean = true,
-    val vehicleVin: String = "JM3KFBDM9P0128934",
-    val discoveredVehicles: List<DiscoveredVehicle> = listOf(
-        DiscoveredVehicle("JM3KFBDM9P0128934", "Mazda CX-50 Turbo AWD", 2024, "Soul Red CX-50", isTcuPaired = true, canRemoteControl = true, isSelected = true),
-        DiscoveredVehicle("JM1BP2M79N1109482", "Mazda 3 Hatchback Premium", 2023, "Polymetal Gray Hatch", isTcuPaired = true, canRemoteControl = true, isSelected = false)
-    ),
-    // Required Connected Services & In-Vehicle API Permissions
-    val dataSharingAgreementGranted: Boolean = true,
-    val remoteControlEntitlementActive: Boolean = true,
-    val inCarVerificationCompleted: Boolean = true,
-    val safetyInterlocksClear: Boolean = true,
-    val lastHandshakeStatus: String = "Authenticated via Mazda Connected Services Bridge (HTTP 200 OK)"
+    val customerId: String = "",
+    val vehicleCount: Int = 0,
+    val lastLoginTimestamp: Long = 0L,
+    val isTcuPaired: Boolean = false,
+    val vehicleVin: String = "",
+    val discoveredVehicles: List<DiscoveredVehicle> = emptyList(),
+    // API Permissions verified against backend response
+    val dataSharingAgreementGranted: Boolean = false,
+    val remoteControlEntitlementActive: Boolean = false,
+    val inCarVerificationCompleted: Boolean = false,
+    val safetyInterlocksClear: Boolean = false,
+    val lastHandshakeStatus: String = "Not connected"
 )
 
+sealed class CommandExecutionState {
+    object Idle : CommandExecutionState()
+    data class Pending(val action: String, val message: String = "Sending request to Mazda Connected Services...") : CommandExecutionState()
+    data class Accepted(val action: String, val message: String = "Command accepted by Mazda cloud. Awaiting TCU execution...") : CommandExecutionState()
+    data class Confirmed(val action: String, val message: String) : CommandExecutionState()
+    data class Failed(val action: String, val errorMessage: String) : CommandExecutionState()
+}
+
 data class VehicleState(
-    val vin: String = "JM3KFBDM9P0128934",
-    val modelName: String = "Mazda CX-50 Turbo AWD",
-    val year: Int = 2024,
-    val nickname: String = "Soul Red CX-50",
+    val vin: String = "",
+    val modelName: String = "No Vehicle Connected",
+    val year: Int = 0,
+    val nickname: String = "Not Connected",
+    val isConnected: Boolean = false,
+    val isVehicleSelected: Boolean = false,
     val engineState: EngineState = EngineState.OFF,
-    val lockState: LockState = LockState.LOCKED,
+    val lockState: LockState = LockState.UNKNOWN,
     val hazardLightsActive: Boolean = false,
     val hornActive: Boolean = false,
-    val odometerMiles: Int = 14820,
-    val fuelPercent: Int = 76,
-    val estimatedRangeMiles: Int = 345,
+    val odometerMiles: Int = 0,
+    val fuelPercent: Int = 0,
+    val estimatedRangeMiles: Int = 0,
+    val isOdometerAvailable: Boolean = false,
+    val isFuelAvailable: Boolean = false,
+    val lastReportTimestamp: Long? = null,
     val doors: DoorState = DoorState(),
     val batteryHealth: BatteryHealth = BatteryHealth(),
     val tpms: TPMSData = TPMSData(),
@@ -182,5 +194,6 @@ data class VehicleState(
     val cloudConfig: CloudApiConfig = CloudApiConfig(),
     val activeDriveSession: ActiveDriveSession? = null,
     val myMazdaAccount: MyMazdaAccount = MyMazdaAccount(),
+    val commandExecutionState: CommandExecutionState = CommandExecutionState.Idle,
     val themeMode: com.example.ui.theme.ThemeMode = com.example.ui.theme.ThemeMode.DARK
 )

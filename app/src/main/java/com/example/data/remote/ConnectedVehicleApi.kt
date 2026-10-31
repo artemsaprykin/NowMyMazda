@@ -21,9 +21,9 @@ import javax.crypto.Cipher
 
 /**
  * Mazda Connected Services Regional Endpoints as implemented by:
- * - cv/mcs (Carlos Villela)
- * - fano0001/home-assistant-mazda (pymazda)
- * - tkarle/home-assistant-mazda
+ * - cv/mcs (Carlos Villela - https://github.com/cv/mcs)
+ * - fano0001/home-assistant-mazda (pymazda - https://github.com/fano0001/home-assistant-mazda)
+ * - tkarle/home-assistant-mazda (https://github.com/tkarle/home-assistant-mazda)
  */
 enum class MazdaRegionalCluster(
     val code: String,
@@ -51,7 +51,7 @@ enum class MazdaRegionalCluster(
     ),
     CV_MCS_BRIDGE(
         code = "BRIDGE",
-        regionTitle = "cv/mcs Local Daemon / Bridge",
+        regionTitle = "cv/mcs Local Daemon / Proxy",
         primaryBaseUrl = "http://10.0.2.2:8080/api/",
         description = "Self-hosted Go cv/mcs or Home Assistant local proxy"
     );
@@ -69,26 +69,21 @@ enum class MazdaRegionalCluster(
  */
 object MazdaSecurityCrypto {
     fun encryptPasswordWithPublicKey(password: String, rawPublicKeyPem: String): String {
-        return try {
-            val sanitized = rawPublicKeyPem
-                .replace("-----BEGIN PUBLIC KEY-----", "")
-                .replace("-----END PUBLIC KEY-----", "")
-                .replace("\\s".toRegex(), "")
-                .trim()
+        val sanitized = rawPublicKeyPem
+            .replace("-----BEGIN PUBLIC KEY-----", "")
+            .replace("-----END PUBLIC KEY-----", "")
+            .replace("\\s".toRegex(), "")
+            .trim()
 
-            val decodedKey = Base64.decode(sanitized, Base64.DEFAULT)
-            val keySpec = X509EncodedKeySpec(decodedKey)
-            val keyFactory = KeyFactory.getInstance("RSA")
-            val publicKey = keyFactory.generatePublic(keySpec)
+        val decodedKey = Base64.decode(sanitized, Base64.DEFAULT)
+        val keySpec = X509EncodedKeySpec(decodedKey)
+        val keyFactory = KeyFactory.getInstance("RSA")
+        val publicKey = keyFactory.generatePublic(keySpec)
 
-            val cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding")
-            cipher.init(Cipher.ENCRYPT_MODE, publicKey)
-            val encryptedBytes = cipher.doFinal(password.toByteArray(Charsets.UTF_8))
-            Base64.encodeToString(encryptedBytes, Base64.NO_WRAP)
-        } catch (_: Exception) {
-            // Safe fallback Base64 encoding for testing or mock proxy servers
-            Base64.encodeToString(password.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-        }
+        val cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding")
+        cipher.init(Cipher.ENCRYPT_MODE, publicKey)
+        val encryptedBytes = cipher.doFinal(password.toByteArray(Charsets.UTF_8))
+        return Base64.encodeToString(encryptedBytes, Base64.NO_WRAP)
     }
 }
 
@@ -104,67 +99,70 @@ data class MazdaLoginRequest(
     @Json(name = "encryptedPassword") val encryptedPassword: String,
     @Json(name = "keyTimestamp") val keyTimestamp: Long = System.currentTimeMillis(),
     @Json(name = "region") val region: String = "MNAO",
-    @Json(name = "deviceId") val deviceId: String = "android_nowmymazda_client_89"
+    @Json(name = "deviceId") val deviceId: String = "android_nowmymazda_app"
 )
 
 data class MazdaLoginResponse(
-    @Json(name = "accessToken") val accessToken: String = "",
+    @Json(name = "accessToken") val accessToken: String? = null,
     @Json(name = "refreshToken") val refreshToken: String? = null,
-    @Json(name = "userId") val userId: String = "",
-    @Json(name = "expiresIn") val expiresInSeconds: Long = 86400,
-    @Json(name = "customerName") val customerName: String? = "Mazda Owner",
-    @Json(name = "region") val region: String? = "MNAO"
+    @Json(name = "userId") val userId: String? = null,
+    @Json(name = "expiresIn") val expiresInSeconds: Long? = null,
+    @Json(name = "customerName") val customerName: String? = null,
+    @Json(name = "region") val region: String? = null,
+    @Json(name = "error") val error: String? = null,
+    @Json(name = "error_description") val errorDescription: String? = null
 )
 
 data class MazdaVehicleItem(
     @Json(name = "vin") val vin: String,
-    @Json(name = "carlineName") val carlineName: String = "CX-50",
-    @Json(name = "modelYear") val modelYear: String = "2024",
-    @Json(name = "nickname") val nickname: String? = "Soul Red CX-50",
-    @Json(name = "colorCode") val colorCode: String? = "46V",
-    @Json(name = "tcuPaired") val tcuPaired: Boolean = true,
-    @Json(name = "canRemoteControl") val canRemoteControl: Boolean = true
+    @Json(name = "carlineName") val carlineName: String? = null,
+    @Json(name = "modelYear") val modelYear: String? = null,
+    @Json(name = "nickname") val nickname: String? = null,
+    @Json(name = "colorCode") val colorCode: String? = null,
+    @Json(name = "tcuPaired") val tcuPaired: Boolean = false,
+    @Json(name = "canRemoteControl") val canRemoteControl: Boolean = false
 )
 
 data class MazdaRemoteCommandRequest(
     @Json(name = "vin") val vin: String,
-    @Json(name = "action") val action: String, // START_ENGINE, STOP_ENGINE, LOCK, UNLOCK, FLASH_LIGHTS, SOUND_HORN
-    @Json(name = "durationMinutes") val durationMinutes: Int? = 15,
-    @Json(name = "targetTempF") val targetTempF: Int? = 72,
-    @Json(name = "heatedSeats") val heatedSeats: Boolean? = true
+    @Json(name = "action") val action: String,
+    @Json(name = "durationMinutes") val durationMinutes: Int? = null,
+    @Json(name = "targetTempF") val targetTempF: Int? = null,
+    @Json(name = "heatedSeats") val heatedSeats: Boolean? = null
 )
 
 data class RemoteControlRequest(
     @Json(name = "vin") val vin: String,
     @Json(name = "action") val action: String,
-    @Json(name = "duration_minutes") val durationMinutes: Int? = 15,
-    @Json(name = "climate_temp_f") val climateTempF: Int? = 72,
-    @Json(name = "heated_seats") val heatedSeats: Boolean? = true
+    @Json(name = "duration_minutes") val durationMinutes: Int? = null,
+    @Json(name = "climate_temp_f") val climateTempF: Int? = null,
+    @Json(name = "heated_seats") val heatedSeats: Boolean? = null
 )
 
 data class RemoteControlResponse(
-    @Json(name = "success") val success: Boolean = true,
-    @Json(name = "command_id") val commandId: String = "cmd_mzd_98234",
-    @Json(name = "status") val status: String = "SUCCESS",
-    @Json(name = "message") val message: String = "Remote Command Dispatched"
+    @Json(name = "success") val success: Boolean = false,
+    @Json(name = "command_id") val commandId: String? = null,
+    @Json(name = "status") val status: String? = null,
+    @Json(name = "message") val message: String? = null
 )
 
 data class CloudTelematicsDto(
     @Json(name = "vin") val vin: String,
-    @Json(name = "engine_status") val engineStatus: String = "OFF",
-    @Json(name = "door_lock_status") val doorLockStatus: String = "LOCKED",
-    @Json(name = "fuel_level_percent") val fuelLevelPercent: Int = 76,
-    @Json(name = "battery_voltage") val batteryVoltage: Double = 12.6,
-    @Json(name = "battery_soh") val batterySoh: Int = 96,
-    @Json(name = "tpms_fl_psi") val tpmsFlPsi: Double = 36.0,
-    @Json(name = "tpms_fr_psi") val tpmsFrPsi: Double = 36.0,
-    @Json(name = "tpms_rl_psi") val tpmsRlPsi: Double = 36.0,
-    @Json(name = "tpms_rr_psi") val tpmsRrPsi: Double = 35.5,
-    @Json(name = "oil_life_percent") val oilLifePercent: Int = 68,
-    @Json(name = "latitude") val latitude: Double = 47.6062,
-    @Json(name = "longitude") val longitude: Double = -122.3321,
-    @Json(name = "odometer_miles") val odometerMiles: Int = 14820,
-    @Json(name = "active_dtc_codes") val dtcCodes: List<String> = emptyList()
+    @Json(name = "engine_status") val engineStatus: String? = null,
+    @Json(name = "door_lock_status") val doorLockStatus: String? = null,
+    @Json(name = "fuel_level_percent") val fuelLevelPercent: Int? = null,
+    @Json(name = "battery_voltage") val batteryVoltage: Double? = null,
+    @Json(name = "battery_soh") val batterySoh: Int? = null,
+    @Json(name = "tpms_fl_psi") val tpmsFlPsi: Double? = null,
+    @Json(name = "tpms_fr_psi") val tpmsFrPsi: Double? = null,
+    @Json(name = "tpms_rl_psi") val tpmsRlPsi: Double? = null,
+    @Json(name = "tpms_rr_psi") val tpmsRrPsi: Double? = null,
+    @Json(name = "oil_life_percent") val oilLifePercent: Int? = null,
+    @Json(name = "latitude") val latitude: Double? = null,
+    @Json(name = "longitude") val longitude: Double? = null,
+    @Json(name = "odometer_miles") val odometerMiles: Int? = null,
+    @Json(name = "active_dtc_codes") val dtcCodes: List<String> = emptyList(),
+    @Json(name = "timestamp") val timestamp: Long? = null
 )
 
 // ----------------- Retrofit API Interface -----------------
@@ -280,11 +278,13 @@ object ApiClient {
         .add(KotlinJsonAdapterFactory())
         .build()
 
+    // Redact Authorization headers to prevent token leakage in Logcat
     private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
         .addInterceptor(HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = HttpLoggingInterceptor.Level.BASIC
+            redactHeader("Authorization")
         })
         .build()
 

@@ -132,12 +132,12 @@ fun BiometricPromptDialog(
                                         title = pendingAction.title,
                                         subtitle = pendingAction.description,
                                         onSuccess = onBiometricSuccess,
-                                        onError = { err ->
+                                        onError = { _ ->
                                             showPinInput = true
                                         }
                                     )
                                 } else {
-                                    onBiometricSuccess()
+                                    showPinInput = true
                                 }
                             }
                             .testTag("biometric_fingerprint_touch"),
@@ -169,12 +169,12 @@ fun BiometricPromptDialog(
                                     title = pendingAction.title,
                                     subtitle = pendingAction.description,
                                     onSuccess = onBiometricSuccess,
-                                    onError = { err ->
+                                    onError = { _ ->
                                         showPinInput = true
                                     }
                                 )
                             } else {
-                                onBiometricSuccess()
+                                showPinInput = true
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = SoulRedPrimary),

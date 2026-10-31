@@ -29,10 +29,12 @@ class ExampleRobolectricTest {
   @Test
   fun `verify vehicle initial state parameters`() {
     val state = VehicleState()
-    assertEquals(LockState.LOCKED, state.lockState)
+    assertEquals(LockState.UNKNOWN, state.lockState)
     assertEquals(EngineState.OFF, state.engineState)
-    assertEquals(36.0, state.tpms.frontLeft.recommendedPsi, 0.01)
-    assertTrue("Battery voltage must be healthy", state.batteryHealth.voltage >= 12.0)
+    assertEquals(false, state.isConnected)
+    assertEquals(false, state.isVehicleSelected)
+    assertEquals(false, state.batteryHealth.isAvailable)
+    assertEquals(0.0, state.batteryHealth.voltage, 0.01)
   }
 
   @Test
@@ -103,19 +105,14 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `verify MyMazda account pairing and TCU handshake`() {
+  fun `verify MyMazda account initial disconnected state and pairing flow`() {
     val state = VehicleState()
-    assertEquals(true, state.myMazdaAccount.isLinked)
-    assertEquals(true, state.myMazdaAccount.isTcuPaired)
+    assertEquals(false, state.myMazdaAccount.isLinked)
+    assertEquals(false, state.myMazdaAccount.isTcuPaired)
+    assertEquals("", state.myMazdaAccount.email)
+    assertEquals("", state.vin)
 
-    // Simulate re-linking a new account
-    val unlinkedAccount = state.myMazdaAccount.copy(
-      isLinked = false,
-      isTcuPaired = false
-    )
-    assertEquals(false, unlinkedAccount.isLinked)
-
-    val linkedAccount = unlinkedAccount.copy(
+    val linkedAccount = state.myMazdaAccount.copy(
       email = "driver@mazda.com",
       vehicleVin = "JM3KK2AA3P0129845",
       region = "North America",
@@ -123,14 +120,8 @@ class ExampleRobolectricTest {
     )
     assertTrue("Account must be linked", linkedAccount.isLinked)
 
-    // In-car 6-digit code validation
-    val validCode = "849201"
-    val invalidCode = "123"
-    assertTrue("6-digit code must be valid length", validCode.length == 6)
-    assertTrue("3-digit code must be invalid length", invalidCode.length != 6)
-
     val fullyPairedAccount = linkedAccount.copy(isTcuPaired = true)
-    assertTrue("TCU modem must be paired with in-car handshake", fullyPairedAccount.isTcuPaired)
+    assertTrue("TCU modem must be paired with verified handshake", fullyPairedAccount.isTcuPaired)
   }
 
   @Test
@@ -215,13 +206,11 @@ class ExampleRobolectricTest {
     assertEquals("Decrypted password must match original secret", secretPassword, decryptedPassword)
   }
 
-  @Test
-  fun `verify MazdaSecurityCrypto fallback on malformed public key`() {
+  @Test(expected = Exception::class)
+  fun `verify MazdaSecurityCrypto fails securely on malformed public key`() {
     val plainPassword = "MyTestPassword"
-    val result = com.example.data.remote.MazdaSecurityCrypto.encryptPasswordWithPublicKey(plainPassword, "NOT_A_VALID_KEY")
-    // Fallback encodes password in Base64
-    val expectedFallback = android.util.Base64.encodeToString(plainPassword.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
-    assertEquals(expectedFallback, result)
+    // Does not fall back to plain base64; fails securely with exception
+    com.example.data.remote.MazdaSecurityCrypto.encryptPasswordWithPublicKey(plainPassword, "NOT_A_VALID_KEY")
   }
 
   @Test
@@ -229,11 +218,22 @@ class ExampleRobolectricTest {
     val state = VehicleState()
     val account = state.myMazdaAccount
 
-    // Verify all 4 required permissions are tracked in state
-    assertTrue("Data sharing agreement should be tracked", account.dataSharingAgreementGranted)
-    assertTrue("Remote control entitlement should be tracked", account.remoteControlEntitlementActive)
-    assertTrue("In-car verification should be tracked", account.inCarVerificationCompleted)
-    assertTrue("Safety interlocks should be clear", account.safetyInterlocksClear)
+    // Verify all 4 required permissions start false until cloud verification
+    assertEquals(false, account.dataSharingAgreementGranted)
+    assertEquals(false, account.remoteControlEntitlementActive)
+    assertEquals(false, account.inCarVerificationCompleted)
+    assertEquals(false, account.safetyInterlocksClear)
+
+    val verifiedAccount = account.copy(
+      dataSharingAgreementGranted = true,
+      remoteControlEntitlementActive = true,
+      inCarVerificationCompleted = true,
+      safetyInterlocksClear = true
+    )
+    assertTrue(verifiedAccount.dataSharingAgreementGranted)
+    assertTrue(verifiedAccount.remoteControlEntitlementActive)
+    assertTrue(verifiedAccount.inCarVerificationCompleted)
+    assertTrue(verifiedAccount.safetyInterlocksClear)
 
     val discovered = com.example.data.model.DiscoveredVehicle(
       vin = "JM3BPACL8N1102938",
@@ -243,7 +243,7 @@ class ExampleRobolectricTest {
       isTcuPaired = true,
       canRemoteControl = true
     )
-    val updatedAccount = account.copy(
+    val updatedAccount = verifiedAccount.copy(
       discoveredVehicles = listOf(discovered),
       regionCode = "MNAO",
       lastHandshakeStatus = "Ready"
@@ -253,6 +253,58 @@ class ExampleRobolectricTest {
     assertEquals("JM3BPACL8N1102938", updatedAccount.discoveredVehicles.first().vin)
     assertEquals("MNAO", updatedAccount.regionCode)
     assertEquals("Ready", updatedAccount.lastHandshakeStatus)
+  }
+
+  @Test
+  fun `verify SecureTokenStorage stores and wipes encrypted session tokens`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val tokenStorage = com.example.data.storage.SecureTokenStorage(context)
+    val testToken = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.realMazdaJwtToken"
+    val testRefresh = "refresh_token_abc123"
+    tokenStorage.saveSession(
+      accessToken = testToken,
+      refreshToken = testRefresh,
+      tokenExpiry = System.currentTimeMillis() + 3600_000L,
+      customerId = "12345",
+      region = "MNAO"
+    )
+    val session = tokenStorage.loadSession()
+    assertTrue("Loaded session must not be null", session != null)
+    assertEquals(testToken, session?.accessToken)
+    assertEquals(testRefresh, session?.refreshToken)
+    assertEquals("12345", session?.customerId)
+    assertEquals("MNAO", session?.region)
+    assertTrue("Session must be valid", tokenStorage.hasValidSession())
+
+    tokenStorage.clearSession()
+    assertEquals(null, tokenStorage.loadSession())
+    assertEquals(false, tokenStorage.hasValidSession())
+  }
+
+  @Test
+  fun `verify AppPreferencesManager PIN hashing and verification`() = kotlinx.coroutines.runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val prefs = com.example.data.storage.AppPreferencesManager(context)
+    val pin = "5821"
+    prefs.setUserPin(pin)
+    assertTrue("Configured pin must exist", prefs.hasConfiguredPin())
+    assertTrue("Valid PIN verifies", prefs.verifyPin(pin))
+    assertTrue("Invalid PIN fails", !prefs.verifyPin("9999"))
+  }
+
+  @Test
+  fun `verify CommandExecutionState transitions`() {
+    val idle = com.example.data.model.CommandExecutionState.Idle
+    val pending = com.example.data.model.CommandExecutionState.Pending("LOCK_DOORS")
+    val accepted = com.example.data.model.CommandExecutionState.Accepted("LOCK_DOORS")
+    val confirmed = com.example.data.model.CommandExecutionState.Confirmed("LOCK_DOORS", "Doors locked successfully")
+    val failed = com.example.data.model.CommandExecutionState.Failed("LOCK_DOORS", "Engine is running; lock refused")
+
+    assertTrue(idle is com.example.data.model.CommandExecutionState.Idle)
+    assertEquals("LOCK_DOORS", pending.action)
+    assertEquals("LOCK_DOORS", accepted.action)
+    assertEquals("Doors locked successfully", confirmed.message)
+    assertEquals("Engine is running; lock refused", failed.errorMessage)
   }
 }
 

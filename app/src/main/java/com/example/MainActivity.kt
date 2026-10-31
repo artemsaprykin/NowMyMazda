@@ -341,8 +341,8 @@ fun MainAppScreen(
                     onScanTpmsSensor = { viewModel.requestTpmsDiagnosticScan() },
                     onSyncCloud = { viewModel.syncCloudApi() },
                     onSaveCloudConfig = { url, token -> viewModel.updateCloudConfig(url, token) },
-                    onLinkMyMazda = { email, vin, region -> viewModel.linkMyMazdaAccount(email, vin, region) },
-                    onPairWithInCarCode = { code -> viewModel.pairWithInCarCode(code) },
+                    onLinkMyMazda = { _, _, _ -> viewModel.selectTab(VehicleNavTab.CONNECTION) },
+                    onPairWithInCarCode = { },
                     onOpenConnectionScreen = { viewModel.selectTab(VehicleNavTab.CONNECTION) }
                 )
 
@@ -389,11 +389,12 @@ fun MainAppScreen(
                     securityConfig = securityConfig,
                     currentTheme = currentTheme,
                     onThemeChange = { viewModel.setThemeMode(it) },
-                    onLinkMyMazda = { email, vin, region -> viewModel.linkMyMazdaAccount(email, vin, region) },
-                    onPairInCarCode = { code -> viewModel.pairWithInCarCode(code) },
+                    onLinkMyMazda = { _, _, _ -> viewModel.selectTab(VehicleNavTab.CONNECTION) },
+                    onPairInCarCode = { },
                     onUpdateSecurityConfig = { cfg -> viewModel.updateSecurityConfig(cfg) },
                     onSaveCloudConfig = { url, token -> viewModel.updateCloudConfig(url, token) },
                     onSyncCloud = { viewModel.syncCloudApi() },
+                    onSetUserPin = { pin -> viewModel.setUserPin(pin) },
                     onOpenVehicleConnection = { viewModel.selectTab(VehicleNavTab.CONNECTION) }
                 )
 
@@ -405,7 +406,6 @@ fun MainAppScreen(
                             viewModel.authenticateWithMazdaConnectedServices(email, pass, region, customUrl, onComplete)
                         },
                         onSelectVehicle = { vin -> viewModel.selectActiveVehicle(vin) },
-                        onPairWithInCarCode = { code -> viewModel.pairWithInCarCode(code) },
                         onTestHandshake = { onResult -> viewModel.testConnectionHandshake(onResult) },
                         onDisconnect = { viewModel.disconnectMazdaAccount() },
                         onBack = { viewModel.selectTab(VehicleNavTab.DASHBOARD) }

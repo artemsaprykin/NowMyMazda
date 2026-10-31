@@ -6,19 +6,18 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.VehicleRepository
 import com.example.data.local.MaintenanceEntity
 import com.example.data.local.TripLogEntity
-import com.example.data.model.EngineState
 import com.example.data.model.LockState
 import com.example.data.model.VehicleState
+import com.example.ui.theme.ThemeMode
 import com.example.util.BiometricSecurityConfig
 import com.example.util.NotificationHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-
-import kotlinx.coroutines.flow.combine
 
 enum class VehicleNavTab {
     DASHBOARD,
@@ -30,31 +29,31 @@ enum class VehicleNavTab {
 }
 
 enum class TripSortOption(val displayName: String) {
-    NEWEST("Newest First"),
+    NEWEST("Most Recent"),
     OLDEST("Oldest First"),
     DISTANCE_DESC("Longest Distance"),
     DISTANCE_ASC("Shortest Distance"),
-    MPG_DESC("Highest MPG"),
-    SCORE_DESC("Highest i-DM Score")
+    MPG_DESC("Best Fuel Economy"),
+    SCORE_DESC("Best Drive Score");
+
+    val label: String get() = displayName
 }
 
 sealed class PendingSecurityAction(val title: String, val description: String) {
     data class RemoteEngineStart(val durationMinutes: Int, val tempF: Int) :
-        PendingSecurityAction("Confirm Remote Engine Start", "Authorize remote ignition of the engine via biometric verification.")
-
-    data object RemoteDoorUnlock :
-        PendingSecurityAction("Confirm Remote Door Unlock", "Authorize vehicle unlock command.")
-
-    data object DismissTheftAlarm :
-        PendingSecurityAction("Deactivate Theft Alarm", "Authenticate to silence alarm and disarm security alert.")
+        PendingSecurityAction("Authorize Remote Engine Start", "Biometric verification required to ignite vehicle engine remotely.")
+    object RemoteDoorUnlock :
+        PendingSecurityAction("Authorize Door Unlock", "Biometric verification required to unlock vehicle doors remotely.")
+    object DismissTheftAlarm :
+        PendingSecurityAction("Dismiss Vehicle Theft Alarm", "Biometric verification required to silence vehicle siren and lights.")
 }
 
 class VehicleViewModel(application: Application) : AndroidViewModel(application) {
-    private val repository = VehicleRepository(application, viewModelScope)
+    val repository = VehicleRepository(application, viewModelScope)
 
     val vehicleState: StateFlow<VehicleState> = repository.vehicleState
 
-    val tripLogs: StateFlow<List<TripLogEntity>> = repository.getTrips()
+    val tripLogs: StateFlow<List<TripLogEntity>> = repository.getAllTrips()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val tripSearchQuery = MutableStateFlow("")
@@ -87,7 +86,7 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val maintenanceReminders: StateFlow<List<MaintenanceEntity>> = repository.getMaintenanceReminders()
+    val maintenanceReminders: StateFlow<List<MaintenanceEntity>> = repository.getMaintenanceRemindersForVin()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _currentTab = MutableStateFlow(VehicleNavTab.DASHBOARD)
@@ -102,7 +101,7 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
     private val _biometricErrorMessage = MutableStateFlow<String?>(null)
     val biometricErrorMessage = _biometricErrorMessage.asStateFlow()
 
-    private val _themeMode = MutableStateFlow(com.example.ui.theme.ThemeMode.DARK)
+    private val _themeMode = MutableStateFlow(ThemeMode.DARK)
     val themeMode = _themeMode.asStateFlow()
 
     private val _userGpsLocation = MutableStateFlow<Pair<Double, Double>?>(null)
@@ -110,6 +109,20 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         NotificationHelper.createNotificationChannel(application)
+
+        // Observe DataStore settings and keep StateFlows reactively updated
+        viewModelScope.launch {
+            repository.preferencesManager.settingsFlow.collect { settings ->
+                _themeMode.value = settings.themeMode
+                _securityConfig.value = BiometricSecurityConfig(
+                    requireForRemoteStart = settings.requireBiometricForRemoteStart,
+                    requireForDoorUnlock = settings.requireBiometricForDoorUnlock,
+                    requireForTheftAlarm = settings.requireBiometricForTheftAlarm,
+                    requireForAppLaunch = settings.requireBiometricForAppLaunch,
+                    hasConfiguredPin = settings.hasCustomPin
+                )
+            }
+        }
     }
 
     fun selectTab(tab: VehicleNavTab) {
@@ -127,20 +140,18 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
     fun requestDoorToggle() {
         val isLocked = vehicleState.value.lockState == LockState.LOCKED
         if (isLocked) {
-            // Unlocking requires biometric check if configured
             if (_securityConfig.value.requireForDoorUnlock) {
                 _pendingSecurityAction.value = PendingSecurityAction.RemoteDoorUnlock
             } else {
                 repository.toggleDoorsLock()
             }
         } else {
-            // Locking does not require biometric
             repository.toggleDoorsLock()
         }
     }
 
     fun requestStopEngine() {
-        repository.stopEngine()
+        repository.requestStopEngine()
     }
 
     fun toggleHazardLights() {
@@ -168,11 +179,11 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun runDtcDiagnosticScan() {
-        repository.runDiagnosticTroubleCodeScan()
+        repository.runDtcDiagnosticScan()
     }
 
     fun clearDtcCodes() {
-        repository.clearDiagnosticTroubleCodes()
+        repository.clearDtcCodes()
     }
 
     fun refreshVehicleGpsLocation() {
@@ -181,10 +192,6 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
 
     fun setSafeZoneCurrent() {
         repository.setVehicleLocationAsSafeZone()
-    }
-
-    fun updateVehicleLocationFromGps(lat: Double, lng: Double) {
-        repository.updateVehicleLocationFromGps(lat, lng)
     }
 
     fun requestDismissTheftAlarm() {
@@ -234,21 +241,35 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun updateSecurityConfig(config: BiometricSecurityConfig) {
-        _securityConfig.value = config
+        viewModelScope.launch {
+            repository.preferencesManager.setBiometricPreferences(
+                forRemoteStart = config.requireForRemoteStart,
+                forDoorUnlock = config.requireForDoorUnlock,
+                forTheftAlarm = config.requireForTheftAlarm,
+                forAppLaunch = config.requireForAppLaunch
+            )
+        }
+    }
+
+    fun setUserPin(pin: String) {
+        viewModelScope.launch {
+            repository.preferencesManager.setUserPin(pin)
+        }
     }
 
     fun authenticateWithBiometricsSuccess() {
         executePendingAction()
     }
 
-    fun authenticateWithPin(pin: String): Boolean {
-        if (pin == _securityConfig.value.userPin) {
-            _biometricErrorMessage.value = null
-            executePendingAction()
-            return true
-        } else {
-            _biometricErrorMessage.value = "Incorrect PIN. Default is 1920"
-            return false
+    fun authenticateWithPin(pin: String) {
+        viewModelScope.launch {
+            val isValid = repository.preferencesManager.verifyPin(pin)
+            if (isValid) {
+                _biometricErrorMessage.value = null
+                executePendingAction()
+            } else {
+                _biometricErrorMessage.value = "Incorrect Security PIN. Please enter your configured 4-digit PIN."
+            }
         }
     }
 
@@ -302,12 +323,10 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun setThemeMode(mode: com.example.ui.theme.ThemeMode) {
-        _themeMode.value = mode
-    }
-
-    fun linkMyMazdaAccount(email: String, vin: String, region: String) {
-        repository.linkMyMazdaAccount(email, vin, region)
+    fun setThemeMode(mode: ThemeMode) {
+        viewModelScope.launch {
+            repository.preferencesManager.setThemeMode(mode)
+        }
     }
 
     fun authenticateWithMazdaConnectedServices(
@@ -321,7 +340,7 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
             val result = repository.authenticateWithMazdaConnectedServices(email, password, regionCode, customBaseUrl)
             result.fold(
                 onSuccess = { list ->
-                    onComplete(true, "Successfully linked ${list.size} vehicle(s) from Mazda Connected Services.")
+                    onComplete(true, "Successfully authenticated with Mazda Connected Services. Found ${list.size} vehicle(s).")
                 },
                 onFailure = { error ->
                     onComplete(false, error.localizedMessage ?: "Failed to connect to Mazda cloud")
@@ -343,10 +362,6 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
             val summary = repository.testConnectionHandshake()
             onResult(summary)
         }
-    }
-
-    fun pairWithInCarCode(code: String): Boolean {
-        return repository.pairWithInCarCode(code)
     }
 
     fun updateUserLocation(lat: Double, lng: Double) {

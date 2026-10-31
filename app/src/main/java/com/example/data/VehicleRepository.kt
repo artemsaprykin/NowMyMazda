@@ -4,13 +4,17 @@ import android.content.Context
 import com.example.data.local.AppDatabase
 import com.example.data.local.MaintenanceEntity
 import com.example.data.local.TripLogEntity
+import com.example.data.model.ActiveDriveSession
 import com.example.data.model.BatteryHealth
 import com.example.data.model.CloudApiConfig
+import com.example.data.model.CommandExecutionState
+import com.example.data.model.DiagnosticStatus
 import com.example.data.model.DiscoveredVehicle
 import com.example.data.model.DoorState
 import com.example.data.model.EngineState
 import com.example.data.model.GeofenceSettings
 import com.example.data.model.LockState
+import com.example.data.model.MyMazdaAccount
 import com.example.data.model.PressureStatus
 import com.example.data.model.RemoteStartSettings
 import com.example.data.model.TPMSData
@@ -20,8 +24,11 @@ import com.example.data.model.VehicleState
 import com.example.data.remote.ApiClient
 import com.example.data.remote.MazdaLoginRequest
 import com.example.data.remote.MazdaRegionalCluster
+import com.example.data.remote.MazdaRemoteCommandRequest
 import com.example.data.remote.MazdaSecurityCrypto
 import com.example.data.remote.RemoteControlRequest
+import com.example.data.storage.AppPreferencesManager
+import com.example.data.storage.SecureTokenStorage
 import com.example.util.LocationHelper
 import com.example.util.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
@@ -31,7 +38,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -43,343 +50,139 @@ class VehicleRepository(
     private val tripDao = database.tripLogDao()
     private val maintenanceDao = database.maintenanceDao()
 
+    val preferencesManager = AppPreferencesManager(context)
+    val tokenStorage = SecureTokenStorage(context)
+
+    // Starts in clean disconnected state with zero mock values
     private val _vehicleState = MutableStateFlow(VehicleState())
     val vehicleState = _vehicleState.asStateFlow()
 
-    private var remoteStartTimerJob: Job? = null
+    private var commandPollingJob: Job? = null
     private var hazardLightTimerJob: Job? = null
 
     init {
         scope.launch {
-            seedInitialDataIfNeeded()
+            restorePersistedState()
         }
     }
 
-    private suspend fun seedInitialDataIfNeeded() {
-        val currentTrips = tripDao.getTripsForVin(_vehicleState.value.vin).firstOrNull()
-        if (currentTrips.isNullOrEmpty()) {
-            val now = System.currentTimeMillis()
-            tripDao.insertTrip(
-                TripLogEntity(
-                    vin = _vehicleState.value.vin,
-                    startTimeMillis = now - 3600_000 * 3,
-                    endTimeMillis = now - 3600_000 * 2,
-                    distanceMiles = 24.8,
-                    durationMinutes = 38,
-                    avgMpg = 29.4,
-                    avgSpeedMph = 42.0,
-                    maxSpeedMph = 68.0,
-                    drivingScore = 94,
-                    startAddress = "Home Garage, Seattle",
-                    endAddress = "Kirkland Tech Campus, WA",
-                    routeSummary = "WA-520 E Floating Bridge & Lake Washington Blvd",
-                    fuelConsumedGal = 0.84,
-                    tripTag = "Commute"
-                )
-            )
-            tripDao.insertTrip(
-                TripLogEntity(
-                    vin = _vehicleState.value.vin,
-                    startTimeMillis = now - 3600_000 * 26,
-                    endTimeMillis = now - 3600_000 * 24,
-                    distanceMiles = 68.2,
-                    durationMinutes = 72,
-                    avgMpg = 32.1,
-                    avgSpeedMph = 58.5,
-                    maxSpeedMph = 74.0,
-                    drivingScore = 91,
-                    startAddress = "Seattle Downtown",
-                    endAddress = "Snoqualmie Pass Summit, WA",
-                    routeSummary = "I-90 E Mountain Corridor via Issaquah & North Bend",
-                    fuelConsumedGal = 2.12,
-                    tripTag = "Highway"
-                )
-            )
-            tripDao.insertTrip(
-                TripLogEntity(
-                    vin = _vehicleState.value.vin,
-                    startTimeMillis = now - 3600_000 * 50,
-                    endTimeMillis = now - 3600_000 * 49,
-                    distanceMiles = 8.4,
-                    durationMinutes = 22,
-                    avgMpg = 24.6,
-                    avgSpeedMph = 23.0,
-                    maxSpeedMph = 38.0,
-                    drivingScore = 88,
-                    startAddress = "Home Garage, Seattle",
-                    endAddress = "Trader Joe's, Queen Anne",
-                    routeSummary = "Elliott Ave & W Mercer St City Route",
-                    fuelConsumedGal = 0.34,
-                    tripTag = "City"
-                )
-            )
-        }
+    private suspend fun restorePersistedState() {
+        val settings = preferencesManager.settingsFlow.first()
+        val session = tokenStorage.loadSession()
+        val isSessionValid = tokenStorage.hasValidSession()
 
-        val currentReminders = maintenanceDao.getRemindersForVin(_vehicleState.value.vin).firstOrNull()
-        if (currentReminders.isNullOrEmpty()) {
-            maintenanceDao.insertReminder(
-                MaintenanceEntity(
-                    vin = _vehicleState.value.vin,
-                    title = "15,000 Mile Scheduled Inspection",
-                    description = "Comprehensive factory multi-point inspection, synthetic oil & filter change, engine coolant test.",
-                    dueOdometerMiles = 15000,
-                    priority = "High",
-                    category = "Engine"
+        val regionCluster = MazdaRegionalCluster.fromCode(settings.accountRegionCode)
+        val targetUrl = if (settings.customBridgeUrl.isNotBlank()) settings.customBridgeUrl else regionCluster.primaryBaseUrl
+
+        if (isSessionValid && session != null && settings.accountEmail.isNotBlank()) {
+            val isVinSelected = settings.selectedVin.isNotBlank()
+            _vehicleState.value = _vehicleState.value.copy(
+                vin = settings.selectedVin,
+                nickname = if (isVinSelected) settings.selectedNickname.ifBlank { "Connected Mazda" } else "Select Vehicle",
+                modelName = if (isVinSelected) settings.selectedNickname.ifBlank { "Mazda Connected Vehicle" } else "No Vehicle Selected",
+                isVehicleSelected = isVinSelected,
+                isConnected = true,
+                themeMode = settings.themeMode,
+                remoteStart = _vehicleState.value.remoteStart.copy(
+                    runDurationMinutes = settings.remoteStartDurationMinutes,
+                    targetTempF = settings.remoteStartTargetTempF
+                ),
+                geofence = GeofenceSettings(
+                    isEnabled = settings.geofenceEnabled,
+                    radiusMeters = settings.geofenceRadiusMeters,
+                    safeZoneName = settings.geofenceSafeZoneName,
+                    centerLatitude = settings.geofenceCenterLat,
+                    centerLongitude = settings.geofenceCenterLng
+                ),
+                cloudConfig = CloudApiConfig(
+                    isConnected = true,
+                    apiUrl = targetUrl,
+                    vin = settings.selectedVin,
+                    apiToken = session.accessToken,
+                    regionEndpoint = regionCluster.regionTitle
+                ),
+                myMazdaAccount = MyMazdaAccount(
+                    email = settings.accountEmail,
+                    isLinked = true,
+                    region = regionCluster.regionTitle,
+                    regionCode = regionCluster.code,
+                    customerId = session.customerId,
+                    vehicleVin = settings.selectedVin,
+                    dataSharingAgreementGranted = true,
+                    remoteControlEntitlementActive = true,
+                    lastHandshakeStatus = "Session restored from secure local Keystore"
                 )
             )
-            maintenanceDao.insertReminder(
-                MaintenanceEntity(
-                    vin = _vehicleState.value.vin,
-                    title = "Tire Rotation & Balance",
-                    description = "Rotate front and rear tires cross-pattern, check tread depth and calibrate TPMS.",
-                    dueOdometerMiles = 15500,
-                    priority = "Medium",
-                    category = "Tires"
-                )
-            )
-            maintenanceDao.insertReminder(
-                MaintenanceEntity(
-                    vin = _vehicleState.value.vin,
-                    title = "Cabin Air Filter Replacement",
-                    description = "Inspect and replace micro-particle pollen and allergen cabin air filter.",
-                    dueOdometerMiles = 16000,
-                    priority = "Low",
-                    category = "Filters"
+
+            // Attempt telemetry sync for the active VIN
+            if (isVinSelected) {
+                syncWithCloudApi()
+            }
+        } else {
+            // Unauthenticated clean initial state
+            _vehicleState.value = _vehicleState.value.copy(
+                themeMode = settings.themeMode,
+                remoteStart = _vehicleState.value.remoteStart.copy(
+                    runDurationMinutes = settings.remoteStartDurationMinutes,
+                    targetTempF = settings.remoteStartTargetTempF
+                ),
+                geofence = GeofenceSettings(
+                    isEnabled = settings.geofenceEnabled,
+                    radiusMeters = settings.geofenceRadiusMeters,
+                    safeZoneName = settings.geofenceSafeZoneName,
+                    centerLatitude = settings.geofenceCenterLat,
+                    centerLongitude = settings.geofenceCenterLng
                 )
             )
         }
     }
 
-    fun getTrips(): Flow<List<TripLogEntity>> = tripDao.getTripsForVin(_vehicleState.value.vin)
+    // ----------------- Room Database Flow Getters -----------------
 
-    fun getMaintenanceReminders(): Flow<List<MaintenanceEntity>> =
-        maintenanceDao.getRemindersForVin(_vehicleState.value.vin)
+    fun getAllTrips(): Flow<List<TripLogEntity>> {
+        return tripDao.getAllTrips()
+    }
+
+    fun getTripsForActiveVin(): Flow<List<TripLogEntity>> {
+        return tripDao.getTripsForVin(_vehicleState.value.vin)
+    }
+
+    fun getMaintenanceRemindersForVin(): Flow<List<MaintenanceEntity>> {
+        return maintenanceDao.getRemindersForVin(_vehicleState.value.vin)
+    }
 
     suspend fun setReminderCompleted(id: Long, isCompleted: Boolean) {
         maintenanceDao.setCompleted(id, isCompleted)
     }
 
     suspend fun addTrip(
-        distanceMiles: Double,
-        durationMinutes: Int,
-        avgMpg: Double,
+        distance: Double,
+        duration: Int,
+        mpg: Double,
         startAddress: String,
         endAddress: String,
         tag: String
     ) {
         val now = System.currentTimeMillis()
-        val score = (85..98).random()
-        val avgSpeed = if (durationMinutes > 0) (distanceMiles / (durationMinutes / 60.0)) else 30.0
+        val avgSpeed = if (duration > 0) (distance / (duration / 60.0)).coerceIn(10.0, 85.0) else 35.0
+        val fuel = if (mpg > 0) Math.round((distance / mpg) * 100.0) / 100.0 else 0.0
+
         tripDao.insertTrip(
             TripLogEntity(
-                vin = _vehicleState.value.vin,
-                startTimeMillis = now - (durationMinutes * 60_000L),
+                vin = _vehicleState.value.vin.ifBlank { "MANUAL_ENTRY" },
+                startTimeMillis = now - (duration * 60_000L),
                 endTimeMillis = now,
-                distanceMiles = distanceMiles,
-                durationMinutes = durationMinutes,
-                avgMpg = avgMpg,
-                avgSpeedMph = avgSpeed,
-                drivingScore = score,
+                distanceMiles = distance,
+                durationMinutes = duration,
+                avgMpg = mpg,
+                avgSpeedMph = Math.round(avgSpeed * 10.0) / 10.0,
+                maxSpeedMph = Math.round((avgSpeed * 1.3) * 10.0) / 10.0,
+                drivingScore = 90,
                 startAddress = startAddress,
                 endAddress = endAddress,
+                routeSummary = "$startAddress → $endAddress",
+                fuelConsumedGal = fuel,
                 tripTag = tag
-            )
-        )
-        // Also update vehicle odometer
-        _vehicleState.value = _vehicleState.value.copy(
-            odometerMiles = _vehicleState.value.odometerMiles + distanceMiles.toInt()
-        )
-    }
-
-    fun remoteStartEngine(durationMinutes: Int = 15, climateTempF: Int = 72) {
-        _vehicleState.value = _vehicleState.value.copy(
-            engineState = EngineState.STARTING
-        )
-        scope.launch {
-            // Dispatch real network request to Connected Vehicle Telematics API Gateway
-            val networkSuccess = dispatchTelematicsCommand(
-                action = "START_ENGINE",
-                durationMinutes = durationMinutes,
-                tempF = climateTempF
-            )
-
-            _vehicleState.value = _vehicleState.value.copy(
-                engineState = EngineState.RUNNING,
-                remoteStart = _vehicleState.value.remoteStart.copy(
-                    runDurationMinutes = durationMinutes,
-                    remainingSeconds = durationMinutes * 60,
-                    targetTempF = climateTempF
-                ),
-                batteryHealth = _vehicleState.value.batteryHealth.copy(
-                    voltage = 14.2,
-                    alternatorStatus = "14.2V (Alternator Active)"
-                )
-            )
-
-            NotificationHelper.sendAlert(
-                context,
-                101,
-                "Engine Started Remotely",
-                "Your ${_vehicleState.value.nickname} engine is running. Cabin climate set to ${climateTempF}°F. Engine will auto-stop in $durationMinutes min.",
-                isUrgent = false
-            )
-
-            // Start countdown timer
-            remoteStartTimerJob?.cancel()
-            remoteStartTimerJob = scope.launch {
-                while (_vehicleState.value.engineState == EngineState.RUNNING &&
-                    _vehicleState.value.remoteStart.remainingSeconds > 0
-                ) {
-                    delay(1000)
-                    val remaining = _vehicleState.value.remoteStart.remainingSeconds - 1
-                    _vehicleState.value = _vehicleState.value.copy(
-                        remoteStart = _vehicleState.value.remoteStart.copy(remainingSeconds = remaining)
-                    )
-                    if (remaining <= 0) {
-                        stopEngine()
-                        NotificationHelper.sendAlert(
-                            context,
-                            102,
-                            "Remote Start Timeout",
-                            "Engine shut down after reaching $durationMinutes minutes limit.",
-                            isUrgent = false
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    private var activeDriveJob: Job? = null
-
-    fun startLiveDrive(
-        startAddress: String = "Home Garage, Seattle",
-        destinationAddress: String = "Bellevue Way & 8th St, WA",
-        tag: String = "Commute"
-    ) {
-        activeDriveJob?.cancel()
-        val session = com.example.data.model.ActiveDriveSession(
-            startTimeMillis = System.currentTimeMillis(),
-            startAddress = startAddress,
-            destinationAddress = destinationAddress,
-            currentDistanceMiles = 0.0,
-            durationSeconds = 0,
-            currentSpeedMph = 18.0,
-            maxSpeedMph = 18.0,
-            instantMpg = 28.2,
-            tripTag = tag
-        )
-
-        _vehicleState.value = _vehicleState.value.copy(
-            engineState = EngineState.RUNNING,
-            lockState = LockState.LOCKED, // Auto door lock when driving starts
-            activeDriveSession = session,
-            batteryHealth = _vehicleState.value.batteryHealth.copy(
-                voltage = 14.2,
-                alternatorStatus = "14.2V (Alternator Active)"
-            )
-        )
-
-        NotificationHelper.sendAlert(
-            context,
-            201,
-            "Automatic Trip Recording Started",
-            "Ignition ON: Logging journey from $startAddress to $destinationAddress.",
-            isUrgent = false
-        )
-
-        activeDriveJob = scope.launch {
-            var seconds = 0
-            var dist = 0.0
-            var maxSpeed = 18.0
-            val speeds = listOf(22.0, 35.0, 48.0, 58.0, 64.0, 62.0, 45.0, 30.0)
-            val legs = session.routeLegs
-
-            while (_vehicleState.value.engineState == EngineState.RUNNING &&
-                _vehicleState.value.activeDriveSession != null
-            ) {
-                delay(1000)
-                seconds++
-                val speedIdx = (seconds / 3) % speeds.size
-                val currentSpeed = speeds[speedIdx]
-                if (currentSpeed > maxSpeed) maxSpeed = currentSpeed
-                // Real-time incremental distance (scaled slightly for interactive demonstration)
-                val deltaMiles = (currentSpeed / 3600.0) * 1.8
-                dist += deltaMiles
-
-                val legIdx = ((seconds / 8) % legs.size).coerceAtMost(legs.size - 1)
-                val currentLeg = legs[legIdx]
-
-                val instantEconomy = 27.0 + (if (currentSpeed > 50) 4.5 else -2.0) + (Math.sin(seconds.toDouble()) * 1.5)
-
-                val updatedSession = _vehicleState.value.activeDriveSession?.copy(
-                    durationSeconds = seconds,
-                    currentDistanceMiles = Math.round(dist * 100.0) / 100.0,
-                    currentSpeedMph = currentSpeed,
-                    maxSpeedMph = maxSpeed,
-                    instantMpg = Math.round(instantEconomy * 10.0) / 10.0,
-                    currentStepIndex = legIdx,
-                    currentRouteLeg = currentLeg
-                )
-
-                _vehicleState.value = _vehicleState.value.copy(
-                    activeDriveSession = updatedSession,
-                    odometerMiles = _vehicleState.value.odometerMiles + if (seconds % 10 == 0) 1 else 0
-                )
-            }
-        }
-    }
-
-    fun stopEngine() {
-        remoteStartTimerJob?.cancel()
-        activeDriveJob?.cancel()
-
-        val session = _vehicleState.value.activeDriveSession
-        if (session != null && session.currentDistanceMiles > 0.05) {
-            // Automatically finalize and save trip to Room Database
-            val now = System.currentTimeMillis()
-            val durationMinutes = Math.max(1, session.durationSeconds / 60)
-            val avgSpeed = (session.currentDistanceMiles / (durationMinutes / 60.0)).coerceIn(15.0, 75.0)
-            val avgEconomy = session.instantMpg.coerceIn(18.0, 38.0)
-            val fuelConsumed = Math.round((session.currentDistanceMiles / avgEconomy) * 100.0) / 100.0
-
-            scope.launch {
-                tripDao.insertTrip(
-                    TripLogEntity(
-                        vin = _vehicleState.value.vin,
-                        startTimeMillis = session.startTimeMillis,
-                        endTimeMillis = now,
-                        distanceMiles = session.currentDistanceMiles,
-                        durationMinutes = durationMinutes,
-                        avgMpg = avgEconomy,
-                        avgSpeedMph = Math.round(avgSpeed * 10.0) / 10.0,
-                        maxSpeedMph = Math.round(session.maxSpeedMph * 10.0) / 10.0,
-                        drivingScore = session.drivingScore,
-                        startAddress = session.startAddress,
-                        endAddress = session.destinationAddress,
-                        routeSummary = "${session.routeLegs.firstOrNull()} → ${session.routeLegs.lastOrNull()} via Arterial Corridor",
-                        fuelConsumedGal = fuelConsumed,
-                        tripTag = session.tripTag
-                    )
-                )
-
-                NotificationHelper.sendAlert(
-                    context,
-                    202,
-                    "Trip Automatically Logged",
-                    "${session.currentDistanceMiles} mi recorded (${durationMinutes} min). Mazda i-DM Drive Score: ${session.drivingScore}/100.",
-                    isUrgent = false
-                )
-            }
-        }
-
-        _vehicleState.value = _vehicleState.value.copy(
-            engineState = EngineState.OFF,
-            activeDriveSession = null,
-            remoteStart = _vehicleState.value.remoteStart.copy(remainingSeconds = 0),
-            batteryHealth = _vehicleState.value.batteryHealth.copy(
-                voltage = 12.6,
-                alternatorStatus = "12.6V (Resting Normal)"
             )
         )
     }
@@ -389,9 +192,18 @@ class VehicleRepository(
     }
 
     suspend fun clearAllTrips() {
-        tripDao.clearAllTrips(_vehicleState.value.vin)
+        val vin = _vehicleState.value.vin
+        if (vin.isNotBlank()) {
+            tripDao.clearAllTrips(vin)
+        }
     }
 
+    // ----------------- Real Mazda Connected Services Authentication -----------------
+
+    /**
+     * Authenticates against the real Mazda Connected Services API (or cv/mcs bridge).
+     * Never returns simulated success, placeholder tokens, or fake vehicles on failure.
+     */
     suspend fun authenticateWithMazdaConnectedServices(
         email: String,
         password: String,
@@ -412,15 +224,30 @@ class VehicleRepository(
             // Step 1: Query dynamic public key for client-side RSA encryption (as in pymazda / mcs)
             val pkResponse = try {
                 apiService.getPublicKey()
-            } catch (_: Exception) {
-                null
+            } catch (e: Exception) {
+                return@withContext Result.failure(
+                    Exception("Failed to reach Mazda gateway at $targetBaseUrl: ${e.localizedMessage}")
+                )
             }
 
-            val rawKey = pkResponse?.body()?.publicKey ?: "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC..."
-            val keyTimestamp = pkResponse?.body()?.keyTimestamp ?: System.currentTimeMillis()
+            if (!pkResponse.isSuccessful || pkResponse.body() == null || pkResponse.body()!!.publicKey.isBlank()) {
+                val code = pkResponse.code()
+                return@withContext Result.failure(
+                    Exception("Mazda public key retrieval failed (HTTP $code). Gateway returned invalid auth key.")
+                )
+            }
+
+            val rawKey = pkResponse.body()!!.publicKey
+            val keyTimestamp = pkResponse.body()!!.keyTimestamp
 
             // Step 2: Encrypt password client-side using RSA public key
-            val encryptedPassword = MazdaSecurityCrypto.encryptPasswordWithPublicKey(password, rawKey)
+            val encryptedPassword = try {
+                MazdaSecurityCrypto.encryptPasswordWithPublicKey(password, rawKey)
+            } catch (e: Exception) {
+                return@withContext Result.failure(
+                    Exception("Client-side RSA encryption failed: ${e.localizedMessage}")
+                )
+            }
 
             // Step 3: Send authenticated login request
             val loginReq = MazdaLoginRequest(
@@ -432,75 +259,118 @@ class VehicleRepository(
 
             val loginRes = try {
                 apiService.login(loginReq)
-            } catch (_: Exception) {
-                null
-            }
-
-            val latency = System.currentTimeMillis() - startTime
-            val token = loginRes?.body()?.accessToken?.takeIf { it.isNotBlank() } ?: "mzd_live_sec_${System.currentTimeMillis()}"
-            val customerName = loginRes?.body()?.customerName ?: "Mazda Owner"
-
-            // Step 4: Discover linked vehicles for the account (getVecBaseInfos)
-            val vehiclesRes = try {
-                apiService.getVehicles("Bearer $token")
-            } catch (_: Exception) {
-                null
-            }
-
-            val discoveredList = if (vehiclesRes != null && vehiclesRes.isSuccessful && !vehiclesRes.body().isNullOrEmpty()) {
-                vehiclesRes.body()!!.mapIndexed { index, item ->
-                    DiscoveredVehicle(
-                        vin = item.vin,
-                        modelName = "Mazda ${item.carlineName}",
-                        modelYear = item.modelYear.toIntOrNull() ?: 2024,
-                        nickname = item.nickname ?: "Mazda ${item.carlineName}",
-                        isTcuPaired = item.tcuPaired,
-                        canRemoteControl = item.canRemoteControl,
-                        isSelected = index == 0
-                    )
-                }
-            } else {
-                listOf(
-                    DiscoveredVehicle("JM3KFBDM9P0128934", "Mazda CX-50 Turbo AWD", 2024, "Soul Red CX-50", isTcuPaired = true, canRemoteControl = true, isSelected = true),
-                    DiscoveredVehicle("JM1BP2M79N1109482", "Mazda 3 Hatchback Premium", 2023, "Polymetal Gray Hatch", isTcuPaired = true, canRemoteControl = true, isSelected = false)
+            } catch (e: Exception) {
+                return@withContext Result.failure(
+                    Exception("Mazda login network request failed: ${e.localizedMessage}")
                 )
             }
 
-            val activeVehicle = discoveredList.firstOrNull { it.isSelected } ?: discoveredList.first()
+            val latency = System.currentTimeMillis() - startTime
 
-            val updatedAccount = _vehicleState.value.myMazdaAccount.copy(
+            if (!loginRes.isSuccessful || loginRes.body() == null) {
+                val code = loginRes.code()
+                val errBody = loginRes.errorBody()?.string()
+                val errorMsg = when (code) {
+                    401 -> "Invalid Mazda account credentials. Please verify your email and password."
+                    403 -> "Mazda authentication rejected (HTTP 403 Forbidden). Cloud security or regional block active."
+                    429 -> "Too many login attempts. Please wait a few minutes before trying again."
+                    else -> "Mazda authentication failed (HTTP $code): ${errBody ?: loginRes.message()}"
+                }
+                return@withContext Result.failure(Exception(errorMsg))
+            }
+
+            val loginData = loginRes.body()!!
+            val token = loginData.accessToken
+            if (token.isNullOrBlank()) {
+                val errMsg = loginData.errorDescription ?: loginData.error ?: "Mazda auth server returned empty session token."
+                return@withContext Result.failure(Exception(errMsg))
+            }
+
+            val customerId = loginData.userId ?: "CUST_${System.currentTimeMillis()}"
+            val expiresInSeconds = loginData.expiresInSeconds ?: 86400L
+            val expiryTime = System.currentTimeMillis() + (expiresInSeconds * 1000L)
+
+            // Step 4: Persist tokens securely in Android KeyStore
+            tokenStorage.saveSession(
+                accessToken = token,
+                refreshToken = loginData.refreshToken,
+                tokenExpiry = expiryTime,
+                customerId = customerId,
+                region = region.code
+            )
+
+            // Step 5: Discover genuine vehicles linked to this Mazda account
+            val vehiclesRes = try {
+                apiService.getVehicles("Bearer $token")
+            } catch (e: Exception) {
+                return@withContext Result.failure(
+                    Exception("Authentication succeeded, but vehicle discovery request failed: ${e.localizedMessage}")
+                )
+            }
+
+            if (!vehiclesRes.isSuccessful || vehiclesRes.body() == null) {
+                val code = vehiclesRes.code()
+                return@withContext Result.failure(
+                    Exception("Failed to retrieve vehicles for account (HTTP $code).")
+                )
+            }
+
+            val vehicleItems = vehiclesRes.body()!!
+            val discoveredList = vehicleItems.mapIndexed { index, item ->
+                DiscoveredVehicle(
+                    vin = item.vin,
+                    modelName = if (!item.carlineName.isNullOrBlank()) "Mazda ${item.carlineName}" else "Mazda Vehicle",
+                    modelYear = item.modelYear?.toIntOrNull() ?: 0,
+                    nickname = item.nickname ?: if (!item.carlineName.isNullOrBlank()) "Mazda ${item.carlineName}" else item.vin,
+                    isTcuPaired = item.tcuPaired,
+                    canRemoteControl = item.canRemoteControl,
+                    isSelected = index == 0
+                )
+            }
+
+            val activeVehicle = discoveredList.firstOrNull()
+
+            // Save settings to DataStore
+            preferencesManager.saveAccountSettings(email, region.code, customBaseUrl)
+            if (activeVehicle != null) {
+                preferencesManager.saveSelectedVehicle(activeVehicle.vin, activeVehicle.nickname)
+            }
+
+            val updatedAccount = MyMazdaAccount(
                 email = email,
                 region = region.regionTitle,
                 regionCode = region.code,
-                customerId = loginRes?.body()?.userId ?: "MZD-${(1000000..9999999).random()}",
+                customerId = customerId,
                 vehicleCount = discoveredList.size,
-                vehicleVin = activeVehicle.vin,
+                vehicleVin = activeVehicle?.vin ?: "",
                 isLinked = true,
-                isTcuPaired = activeVehicle.isTcuPaired,
+                isTcuPaired = activeVehicle?.isTcuPaired ?: false,
                 lastLoginTimestamp = System.currentTimeMillis(),
                 discoveredVehicles = discoveredList,
                 dataSharingAgreementGranted = true,
-                remoteControlEntitlementActive = true,
-                inCarVerificationCompleted = true,
+                remoteControlEntitlementActive = activeVehicle?.canRemoteControl ?: false,
+                inCarVerificationCompleted = activeVehicle?.isTcuPaired ?: false,
                 safetyInterlocksClear = true,
-                lastHandshakeStatus = "Authenticated via ${region.regionTitle} (${latency}ms, 200 OK)"
+                lastHandshakeStatus = "Authenticated via ${region.regionTitle} (${latency}ms, HTTP 200 OK)"
             )
 
             _vehicleState.value = _vehicleState.value.copy(
-                vin = activeVehicle.vin,
-                modelName = activeVehicle.modelName,
-                year = activeVehicle.modelYear,
-                nickname = activeVehicle.nickname,
+                vin = activeVehicle?.vin ?: "",
+                modelName = activeVehicle?.modelName ?: "No Vehicle Selected",
+                year = activeVehicle?.modelYear ?: 0,
+                nickname = activeVehicle?.nickname ?: "No Vehicle",
+                isVehicleSelected = activeVehicle != null,
+                isConnected = true,
                 myMazdaAccount = updatedAccount,
-                cloudConfig = _vehicleState.value.cloudConfig.copy(
+                cloudConfig = CloudApiConfig(
                     isConnected = true,
                     apiUrl = targetBaseUrl,
                     apiToken = token,
-                    vin = activeVehicle.vin,
+                    vin = activeVehicle?.vin ?: "",
                     lastHttpCode = 200,
                     lastLatencyMs = latency,
                     lastErrorMessage = null,
-                    lastExecutedCommand = "Account Link & Vehicle Discovery (200 OK)",
+                    lastExecutedCommand = "Authenticated & Discovered (${discoveredList.size} vehicles)",
                     lastSyncTimestamp = System.currentTimeMillis(),
                     regionEndpoint = region.regionTitle
                 )
@@ -510,10 +380,13 @@ class VehicleRepository(
                 context,
                 301,
                 "Mazda Account Connected",
-                "Connected as $email ($customerName). Discovered ${discoveredList.size} vehicles in ${region.code}."
+                "Connected as $email. Retrieved ${discoveredList.size} genuine vehicle(s) from ${region.code}."
             )
 
-            syncWithCloudApi()
+            // Trigger telemetry sync for active vehicle if available
+            if (activeVehicle != null) {
+                syncWithCloudApi()
+            }
 
             Result.success(discoveredList)
         } catch (e: Exception) {
@@ -536,15 +409,21 @@ class VehicleRepository(
         }
         val selected = updatedList.find { it.vin == vin } ?: return
 
+        scope.launch {
+            preferencesManager.saveSelectedVehicle(selected.vin, selected.nickname)
+        }
+
         _vehicleState.value = _vehicleState.value.copy(
             vin = selected.vin,
             modelName = selected.modelName,
             year = selected.modelYear,
             nickname = selected.nickname,
+            isVehicleSelected = true,
             myMazdaAccount = currentAccount.copy(
                 vehicleVin = selected.vin,
                 discoveredVehicles = updatedList,
-                isTcuPaired = selected.isTcuPaired
+                isTcuPaired = selected.isTcuPaired,
+                remoteControlEntitlementActive = selected.canRemoteControl
             ),
             cloudConfig = _vehicleState.value.cloudConfig.copy(
                 vin = selected.vin
@@ -559,22 +438,27 @@ class VehicleRepository(
             context,
             303,
             "Active Vehicle Switched",
-            "Switched active vehicle to ${selected.nickname} (${selected.vin})."
+            "Active vehicle set to ${selected.nickname} (${selected.vin})."
         )
     }
 
     fun disconnectMazdaAccount() {
-        _vehicleState.value = _vehicleState.value.copy(
-            myMazdaAccount = _vehicleState.value.myMazdaAccount.copy(
-                isLinked = false,
-                isTcuPaired = false,
-                lastHandshakeStatus = "Account unlinked by user"
-            ),
-            cloudConfig = _vehicleState.value.cloudConfig.copy(
-                isConnected = false,
-                apiToken = "",
-                lastExecutedCommand = "Account Unlinked"
-            )
+        tokenStorage.clearSession()
+        scope.launch {
+            preferencesManager.clearAccountAndVehicle()
+        }
+
+        _vehicleState.value = VehicleState(
+            themeMode = _vehicleState.value.themeMode,
+            cloudConfig = CloudApiConfig(isConnected = false, lastExecutedCommand = "Account Signed Out"),
+            myMazdaAccount = MyMazdaAccount(lastHandshakeStatus = "Account signed out")
+        )
+
+        NotificationHelper.sendAlert(
+            context,
+            304,
+            "Signed Out",
+            "Mazda account session and tokens cleared securely from device."
         )
     }
 
@@ -582,254 +466,552 @@ class VehicleRepository(
         val start = System.currentTimeMillis()
         try {
             val service = ApiClient.createService(_vehicleState.value.cloudConfig.apiUrl)
-            val token = "Bearer ${_vehicleState.value.cloudConfig.apiToken}"
-            val res = try {
-                service.pingGateway(token)
-            } catch (_: Exception) {
-                null
+            val session = tokenStorage.loadSession()
+            val token = session?.accessToken ?: _vehicleState.value.cloudConfig.apiToken
+
+            val res = if (token.isNotBlank()) {
+                service.pingGateway("Bearer $token")
+            } else {
+                service.getPublicKey()
             }
+
             val latency = System.currentTimeMillis() - start
-            val code = res?.code() ?: 200
+            val code = res.code()
+            val isSuccess = res.isSuccessful
+
             _vehicleState.value = _vehicleState.value.copy(
                 cloudConfig = _vehicleState.value.cloudConfig.copy(
                     lastHttpCode = code,
                     lastLatencyMs = latency,
                     lastSyncTimestamp = System.currentTimeMillis(),
-                    lastExecutedCommand = "Handshake Ping ($code)"
+                    lastExecutedCommand = "Handshake Ping (HTTP $code)",
+                    lastErrorMessage = if (isSuccess) null else "HTTP $code: ${res.message()}"
                 )
             )
-            "Handshake OK: Gateway responded in ${latency}ms (HTTP $code). TCU cellular uplink nominal."
+
+            if (isSuccess) {
+                "Handshake OK: Gateway responded in ${latency}ms (HTTP $code). Gateway link active."
+            } else {
+                "Handshake Warning: Gateway returned HTTP $code (${res.message()}) in ${latency}ms."
+            }
         } catch (e: Exception) {
             val latency = System.currentTimeMillis() - start
-            "Handshake Notice (${latency}ms): ${e.localizedMessage ?: "Gateway verification active"}"
+            _vehicleState.value = _vehicleState.value.copy(
+                cloudConfig = _vehicleState.value.cloudConfig.copy(
+                    lastHttpCode = null,
+                    lastLatencyMs = latency,
+                    lastErrorMessage = "${e.javaClass.simpleName}: ${e.localizedMessage ?: "Connection error"}"
+                )
+            )
+            "Handshake Error (${latency}ms): ${e.localizedMessage ?: "Unable to connect to gateway"}"
         }
     }
 
-    fun linkMyMazdaAccount(email: String, vin: String, region: String) {
-        val updatedAccount = _vehicleState.value.myMazdaAccount.copy(
-            email = email,
-            vehicleVin = vin,
-            region = region,
-            isLinked = true,
-            isTcuPaired = true,
-            lastLoginTimestamp = System.currentTimeMillis()
-        )
+    // ----------------- Real Remote Commands -----------------
+
+    fun remoteStartEngine(durationMinutes: Int, climateTempF: Int) {
+        if (!_vehicleState.value.isVehicleSelected || _vehicleState.value.vin.isBlank()) {
+            NotificationHelper.sendAlert(context, 101, "Command Rejected", "No Mazda vehicle is currently selected.")
+            return
+        }
+
         _vehicleState.value = _vehicleState.value.copy(
-            vin = vin,
-            myMazdaAccount = updatedAccount,
-            cloudConfig = _vehicleState.value.cloudConfig.copy(
-                vin = vin,
-                isConnected = true,
-                lastSyncTimestamp = System.currentTimeMillis()
+            commandExecutionState = CommandExecutionState.Pending("Remote Engine Start", "Sending ignition request to Mazda Connected Services...")
+        )
+
+        scope.launch {
+            val result = executeRemoteCommand(
+                action = "START_ENGINE",
+                durationMinutes = durationMinutes,
+                tempF = climateTempF
             )
-        )
-        NotificationHelper.sendAlert(
-            context,
-            301,
-            "MyMazda Account Connected",
-            "Signed in as $email. Telematics control unit paired to VIN $vin."
-        )
+
+            result.fold(
+                onSuccess = { responseMsg ->
+                    _vehicleState.value = _vehicleState.value.copy(
+                        commandExecutionState = CommandExecutionState.Accepted(
+                            "Remote Engine Start",
+                            responseMsg.ifBlank { "Ignition request accepted by cloud. Awaiting TCU verification..." }
+                        )
+                    )
+
+                    NotificationHelper.sendAlert(
+                        context,
+                        101,
+                        "Remote Start Dispatched",
+                        "Command accepted by Mazda cloud. Polling vehicle TCU status...",
+                        isUrgent = false
+                    )
+
+                    // Poll vehicle status to confirm physical ignition result
+                    pollForCommandConfirmation(
+                        expectedCondition = { state -> state.engineState == EngineState.RUNNING },
+                        actionName = "Remote Engine Start",
+                        successMsg = "Engine ignition confirmed active by TCU."
+                    )
+                },
+                onFailure = { error ->
+                    _vehicleState.value = _vehicleState.value.copy(
+                        commandExecutionState = CommandExecutionState.Failed(
+                            "Remote Engine Start",
+                            error.localizedMessage ?: "Remote start failed"
+                        )
+                    )
+                    NotificationHelper.sendAlert(
+                        context,
+                        101,
+                        "Remote Start Failed",
+                        error.localizedMessage ?: "Request failed. Vehicle status unchanged.",
+                        isUrgent = true
+                    )
+                }
+            )
+        }
     }
 
-    fun pairWithInCarCode(code: String): Boolean {
-        if (code.length != 6) return false
-        val updatedAccount = _vehicleState.value.myMazdaAccount.copy(
-            isTcuPaired = true,
-            isLinked = true,
-            inCarVerificationCompleted = true
-        )
+    fun requestStopEngine() {
+        if (!_vehicleState.value.isVehicleSelected || _vehicleState.value.vin.isBlank()) return
+
         _vehicleState.value = _vehicleState.value.copy(
-            myMazdaAccount = updatedAccount,
-            cloudConfig = _vehicleState.value.cloudConfig.copy(isConnected = true)
+            commandExecutionState = CommandExecutionState.Pending("Engine Stop", "Sending stop command to Mazda cloud...")
         )
-        NotificationHelper.sendAlert(
-            context,
-            302,
-            "In-Car Pairing Verified",
-            "Mazda Connect 6-digit handshake completed. Remote commands active."
+
+        scope.launch {
+            val result = executeRemoteCommand(action = "STOP_ENGINE")
+            result.fold(
+                onSuccess = { msg ->
+                    _vehicleState.value = _vehicleState.value.copy(
+                        commandExecutionState = CommandExecutionState.Accepted("Engine Stop", msg)
+                    )
+                    pollForCommandConfirmation(
+                        expectedCondition = { state -> state.engineState == EngineState.OFF },
+                        actionName = "Engine Stop",
+                        successMsg = "Engine confirmed OFF by TCU."
+                    )
+                },
+                onFailure = { error ->
+                    _vehicleState.value = _vehicleState.value.copy(
+                        commandExecutionState = CommandExecutionState.Failed("Engine Stop", error.localizedMessage ?: "Failed to stop engine")
+                    )
+                }
+            )
+        }
+    }
+
+    fun requestDoorLock() {
+        if (!_vehicleState.value.isVehicleSelected || _vehicleState.value.vin.isBlank()) return
+
+        _vehicleState.value = _vehicleState.value.copy(
+            commandExecutionState = CommandExecutionState.Pending("Door Lock", "Sending lock command to vehicle TCU...")
         )
-        return true
+
+        scope.launch {
+            val result = executeRemoteCommand(action = "LOCK")
+            result.fold(
+                onSuccess = { msg ->
+                    _vehicleState.value = _vehicleState.value.copy(
+                        commandExecutionState = CommandExecutionState.Accepted("Door Lock", msg)
+                    )
+                    pollForCommandConfirmation(
+                        expectedCondition = { state -> state.lockState == LockState.LOCKED },
+                        actionName = "Door Lock",
+                        successMsg = "Vehicle doors confirmed LOCKED."
+                    )
+                },
+                onFailure = { error ->
+                    _vehicleState.value = _vehicleState.value.copy(
+                        commandExecutionState = CommandExecutionState.Failed("Door Lock", error.localizedMessage ?: "Lock request failed")
+                    )
+                }
+            )
+        }
+    }
+
+    fun requestDoorUnlock() {
+        if (!_vehicleState.value.isVehicleSelected || _vehicleState.value.vin.isBlank()) return
+
+        _vehicleState.value = _vehicleState.value.copy(
+            commandExecutionState = CommandExecutionState.Pending("Door Unlock", "Sending unlock command to vehicle TCU...")
+        )
+
+        scope.launch {
+            val result = executeRemoteCommand(action = "UNLOCK")
+            result.fold(
+                onSuccess = { msg ->
+                    _vehicleState.value = _vehicleState.value.copy(
+                        commandExecutionState = CommandExecutionState.Accepted("Door Unlock", msg)
+                    )
+                    pollForCommandConfirmation(
+                        expectedCondition = { state -> state.lockState == LockState.UNLOCKED },
+                        actionName = "Door Unlock",
+                        successMsg = "Vehicle doors confirmed UNLOCKED."
+                    )
+                },
+                onFailure = { error ->
+                    _vehicleState.value = _vehicleState.value.copy(
+                        commandExecutionState = CommandExecutionState.Failed("Door Unlock", error.localizedMessage ?: "Unlock request failed")
+                    )
+                }
+            )
+        }
     }
 
     fun toggleDoorsLock() {
-        val newLock = if (_vehicleState.value.lockState == LockState.LOCKED) LockState.UNLOCKED else LockState.LOCKED
-        _vehicleState.value = _vehicleState.value.copy(lockState = newLock)
-        scope.launch {
-            val action = if (newLock == LockState.LOCKED) "LOCK" else "UNLOCK"
-            dispatchTelematicsCommand(action)
+        if (_vehicleState.value.lockState == LockState.LOCKED) {
+            requestDoorUnlock()
+        } else {
+            requestDoorLock()
         }
-        NotificationHelper.sendAlert(
-            context,
-            103,
-            if (newLock == LockState.LOCKED) "Doors Locked" else "Doors Unlocked",
-            "Vehicle ${if (newLock == LockState.LOCKED) "is secured." else "doors were unlocked remotely."}"
-        )
     }
 
     fun toggleHazardLights() {
-        val active = !_vehicleState.value.hazardLightsActive
-        _vehicleState.value = _vehicleState.value.copy(hazardLightsActive = active)
+        val targetAction = if (!_vehicleState.value.hazardLightsActive) "FLASH_HAZARDS_ON" else "FLASH_HAZARDS_OFF"
         scope.launch {
-            dispatchTelematicsCommand(if (active) "FLASH_HAZARDS_ON" else "FLASH_HAZARDS_OFF")
-        }
-        if (active) {
-            hazardLightTimerJob?.cancel()
-            hazardLightTimerJob = scope.launch {
-                delay(10000) // Flash for 10 seconds then auto turn off
-                _vehicleState.value = _vehicleState.value.copy(hazardLightsActive = false)
-            }
+            executeRemoteCommand(targetAction)
         }
     }
 
     fun soundHornAndFlash() {
-        _vehicleState.value = _vehicleState.value.copy(
-            hornActive = true,
-            hazardLightsActive = true
-        )
         scope.launch {
-            dispatchTelematicsCommand("SOUND_HORN_AND_FLASH")
-            delay(4000)
-            _vehicleState.value = _vehicleState.value.copy(
-                hornActive = false,
-                hazardLightsActive = false
-            )
+            executeRemoteCommand("SOUND_HORN_AND_FLASH")
         }
     }
 
     fun toggleTrunk() {
-        val isTrunkOpen = !_vehicleState.value.doors.isTrunkOpen
-        _vehicleState.value = _vehicleState.value.copy(
-            doors = _vehicleState.value.doors.copy(isTrunkOpen = isTrunkOpen)
-        )
         scope.launch {
-            dispatchTelematicsCommand("TOGGLE_TRUNK")
+            executeRemoteCommand("TOGGLE_TRUNK")
         }
     }
 
     fun calibrateTpms() {
-        _vehicleState.value = _vehicleState.value.copy(
-            tpms = TPMSData(
-                frontLeft = TireInfo("FL", "Front Left", 36.0, 36.0, 74, PressureStatus.NORMAL),
-                frontRight = TireInfo("FR", "Front Right", 36.0, 36.0, 74, PressureStatus.NORMAL),
-                rearLeft = TireInfo("RL", "Rear Left", 36.0, 36.0, 75, PressureStatus.NORMAL),
-                rearRight = TireInfo("RR", "Rear Right", 36.0, 36.0, 75, PressureStatus.NORMAL)
-            )
-        )
         scope.launch {
-            dispatchTelematicsCommand("RECALIBRATE_TPMS")
+            executeRemoteCommand("RECALIBRATE_TPMS")
+            NotificationHelper.sendAlert(
+                context,
+                104,
+                "TPMS Calibration",
+                "TPMS calibration command sent. Values will update on next telematics report."
+            )
         }
-        NotificationHelper.sendAlert(
-            context,
-            104,
-            "TPMS Recalibrated",
-            "All four tires reset to factory baseline 36.0 PSI via OBD-II."
-        )
     }
 
     fun requestTpmsDiagnosticScan() {
         scope.launch {
-            dispatchTelematicsCommand("TPMS_DIAGNOSTIC_SCAN")
-            NotificationHelper.sendAlert(
-                context,
-                104,
-                "Live TPMS Diagnostic Scan",
-                "Direct RF wheel sensor query complete: FL 36.0, FR 36.0, RL 36.0, RR 35.5 PSI."
-            )
+            syncWithCloudApi()
         }
     }
 
     fun runBatteryLoadTest() {
+        NotificationHelper.sendAlert(
+            context,
+            106,
+            "Battery Health",
+            "Direct 12V battery cranking load test requires local OBD-II hardware adapter."
+        )
+    }
+
+    fun runDtcDiagnosticScan() {
         scope.launch {
-            dispatchTelematicsCommand("BATTERY_LOAD_TEST")
+            executeRemoteCommand("DIAGNOSTIC_SCAN")
+            syncWithCloudApi()
+        }
+    }
+
+    fun clearDtcCodes() {
+        scope.launch {
+            executeRemoteCommand("CLEAR_DTC")
+            syncWithCloudApi()
+        }
+    }
+
+    private suspend fun executeRemoteCommand(
+        action: String,
+        durationMinutes: Int? = null,
+        tempF: Int? = null
+    ): Result<String> = withContext(Dispatchers.IO) {
+        val vin = _vehicleState.value.vin
+        if (vin.isBlank()) {
+            return@withContext Result.failure(Exception("No active vehicle selected."))
+        }
+
+        val session = tokenStorage.loadSession()
+        val token = session?.accessToken ?: _vehicleState.value.cloudConfig.apiToken
+        if (token.isBlank()) {
+            return@withContext Result.failure(Exception("Active Mazda Connected Services session required."))
+        }
+
+        val startTime = System.currentTimeMillis()
+        try {
+            val service = ApiClient.createService(_vehicleState.value.cloudConfig.apiUrl)
+            val authHeader = "Bearer $token"
+
+            val response = when (action) {
+                "START_ENGINE" -> service.remoteStartEngine(
+                    token = authHeader,
+                    vin = vin,
+                    request = MazdaRemoteCommandRequest(
+                        vin = vin,
+                        action = action,
+                        durationMinutes = durationMinutes ?: 15,
+                        targetTempF = tempF ?: 72
+                    )
+                )
+                "STOP_ENGINE" -> service.remoteStopEngine(authHeader, vin)
+                "LOCK" -> service.remoteLockDoors(authHeader, vin)
+                "UNLOCK" -> service.remoteUnlockDoors(authHeader, vin)
+                "FLASH_HAZARDS_ON", "FLASH_HAZARDS_OFF" -> service.remoteHazardLights(authHeader, vin)
+                "SOUND_HORN_AND_FLASH" -> service.remoteHorn(authHeader, vin)
+                "TOGGLE_TRUNK" -> service.remoteTrunk(authHeader, vin)
+                "DIAGNOSTIC_SCAN" -> service.runDiagnosticScan(authHeader, vin)
+                "CLEAR_DTC" -> service.clearDtcCodes(authHeader, vin)
+                else -> {
+                    // Fallback to legacy/bridge route
+                    service.executeControlCommand(
+                        token = authHeader,
+                        request = RemoteControlRequest(vin = vin, action = action, durationMinutes = durationMinutes, climateTempF = tempF)
+                    )
+                }
+            }
+
+            val latency = System.currentTimeMillis() - startTime
+            val code = response.code()
+
             _vehicleState.value = _vehicleState.value.copy(
-                batteryHealth = BatteryHealth(
-                    voltage = 12.6,
-                    stateOfHealthPercent = 96,
-                    stateOfChargePercent = 88,
-                    temperatureF = 72,
-                    alternatorStatus = "14.2V (Charging OK)",
-                    healthSummary = "Good Condition"
+                cloudConfig = _vehicleState.value.cloudConfig.copy(
+                    lastHttpCode = code,
+                    lastLatencyMs = latency,
+                    lastExecutedCommand = "$action ($code)",
+                    lastErrorMessage = if (response.isSuccessful) null else "HTTP $code: ${response.message()}",
+                    lastSyncTimestamp = System.currentTimeMillis()
                 )
             )
-            NotificationHelper.sendAlert(
-                context,
-                106,
-                "12V Battery Health Tested",
-                "Resting voltage: 12.6V | Cranking health: 96% | Alternator output: 14.2V."
+
+            if (response.isSuccessful) {
+                val body = response.body()
+                val message = body?.message ?: "Command $action accepted by Mazda cloud gateway."
+                Result.success(message)
+            } else {
+                val errorMsg = when (code) {
+                    401 -> "Session expired. Please reconnect your Mazda account."
+                    403 -> "Remote command disallowed by Mazda (vehicle interlocks engaged or ignition locked)."
+                    404 -> "Vehicle VIN not found on this regional cluster."
+                    else -> "Command rejected by server (HTTP $code: ${response.message()})"
+                }
+                Result.failure(Exception(errorMsg))
+            }
+        } catch (e: Exception) {
+            val latency = System.currentTimeMillis() - startTime
+            _vehicleState.value = _vehicleState.value.copy(
+                cloudConfig = _vehicleState.value.cloudConfig.copy(
+                    lastHttpCode = null,
+                    lastLatencyMs = latency,
+                    lastExecutedCommand = "$action",
+                    lastErrorMessage = "${e.javaClass.simpleName}: ${e.localizedMessage ?: "Network error"}",
+                    lastSyncTimestamp = System.currentTimeMillis()
+                )
+            )
+            Result.failure(e)
+        }
+    }
+
+    private fun pollForCommandConfirmation(
+        expectedCondition: (VehicleState) -> Boolean,
+        actionName: String,
+        successMsg: String
+    ) {
+        commandPollingJob?.cancel()
+        commandPollingJob = scope.launch {
+            // Give TCU time to receive network command (Mazda TCU polling cycle takes 4-8s)
+            delay(4000)
+            var attempts = 0
+            while (attempts < 3) {
+                syncWithCloudApi()
+                if (expectedCondition(_vehicleState.value)) {
+                    _vehicleState.value = _vehicleState.value.copy(
+                        commandExecutionState = CommandExecutionState.Confirmed(actionName, successMsg)
+                    )
+                    delay(3000)
+                    _vehicleState.value = _vehicleState.value.copy(
+                        commandExecutionState = CommandExecutionState.Idle
+                    )
+                    return@launch
+                }
+                attempts++
+                delay(3000)
+            }
+            // If condition was not yet verified, transition back to Idle
+            _vehicleState.value = _vehicleState.value.copy(
+                commandExecutionState = CommandExecutionState.Idle
             )
         }
     }
 
-    fun runDiagnosticTroubleCodeScan() {
-        scope.launch {
-            _vehicleState.value = _vehicleState.value.copy(
-                diagnostics = _vehicleState.value.diagnostics.copy(
-                    scanStatusMessage = "Connecting to vehicle telematics CAN bus..."
-                )
-            )
-            dispatchTelematicsCommand("DTC_OBD2_SCAN")
-            _vehicleState.value = _vehicleState.value.copy(
-                diagnostics = _vehicleState.value.diagnostics.copy(
+    // ----------------- Real Telematics Status Sync -----------------
+
+    suspend fun syncWithCloudApi(): Boolean = withContext(Dispatchers.IO) {
+        val vin = _vehicleState.value.vin
+        if (vin.isBlank()) return@withContext false
+
+        val session = tokenStorage.loadSession()
+        val token = session?.accessToken ?: _vehicleState.value.cloudConfig.apiToken
+        if (token.isBlank()) return@withContext false
+
+        _vehicleState.value = _vehicleState.value.copy(
+            cloudConfig = _vehicleState.value.cloudConfig.copy(isSyncing = true)
+        )
+        val startTime = System.currentTimeMillis()
+        try {
+            val service = ApiClient.createService(_vehicleState.value.cloudConfig.apiUrl)
+            val authHeader = "Bearer $token"
+
+            val response = try {
+                service.getVehicleStatus(authHeader, vin)
+            } catch (_: Exception) {
+                // Fallback to bridge telematics endpoint if direct status 404s
+                service.getVehicleTelematics(authHeader, vin)
+            }
+
+            val latency = System.currentTimeMillis() - startTime
+
+            if (response.isSuccessful && response.body() != null) {
+                val dto = response.body()!!
+
+                val mappedEngine = when (dto.engineStatus?.uppercase()) {
+                    "RUNNING", "ON" -> EngineState.RUNNING
+                    "STARTING" -> EngineState.STARTING
+                    else -> EngineState.OFF
+                }
+
+                val mappedLock = when (dto.doorLockStatus?.uppercase()) {
+                    "LOCKED" -> LockState.LOCKED
+                    "UNLOCKED" -> LockState.UNLOCKED
+                    else -> LockState.UNKNOWN
+                }
+
+                val hasBattery = dto.batteryVoltage != null && dto.batteryVoltage > 0.0
+                val updatedBattery = if (hasBattery) {
+                    BatteryHealth(
+                        isAvailable = true,
+                        voltage = dto.batteryVoltage!!,
+                        stateOfHealthPercent = dto.batterySoh ?: 90,
+                        stateOfChargePercent = ((dto.batteryVoltage - 11.8) / (12.7 - 11.8) * 100.0).toInt().coerceIn(0, 100),
+                        alternatorStatus = if (mappedEngine == EngineState.RUNNING) "${dto.batteryVoltage}V (Charging)" else "${dto.batteryVoltage}V (Resting)",
+                        healthSummary = if (dto.batteryVoltage >= 12.2) "Good Condition" else "Low Voltage Alert"
+                    )
+                } else {
+                    _vehicleState.value.batteryHealth
+                }
+
+                val hasTpms = dto.tpmsFlPsi != null && dto.tpmsFlPsi > 0.0
+                val updatedTpms = if (hasTpms) {
+                    TPMSData(
+                        isAvailable = true,
+                        frontLeft = TireInfo("FL", "Front Left", dto.tpmsFlPsi!!, status = if (dto.tpmsFlPsi < 30.0) PressureStatus.LOW else PressureStatus.NORMAL, isAvailable = true),
+                        frontRight = TireInfo("FR", "Front Right", dto.tpmsFrPsi ?: dto.tpmsFlPsi, status = PressureStatus.NORMAL, isAvailable = true),
+                        rearLeft = TireInfo("RL", "Rear Left", dto.tpmsRlPsi ?: dto.tpmsFlPsi, status = PressureStatus.NORMAL, isAvailable = true),
+                        rearRight = TireInfo("RR", "Rear Right", dto.tpmsRrPsi ?: dto.tpmsFlPsi, status = PressureStatus.NORMAL, isAvailable = true)
+                    )
+                } else {
+                    _vehicleState.value.tpms
+                }
+
+                val hasGps = dto.latitude != null && dto.longitude != null && dto.latitude != 0.0
+                val updatedLocation = if (hasGps) {
+                    VehicleGpsLocation(
+                        isAvailable = true,
+                        latitude = dto.latitude!!,
+                        longitude = dto.longitude!!,
+                        address = "GPS: ${String.format(java.util.Locale.US, "%.4f, %.4f", dto.latitude, dto.longitude)}",
+                        lastUpdatedTimestamp = dto.timestamp ?: System.currentTimeMillis()
+                    )
+                } else {
+                    _vehicleState.value.location
+                }
+
+                val updatedDiagnostics = DiagnosticStatus(
+                    isAvailable = true,
+                    checkEngineOn = dto.dtcCodes.isNotEmpty(),
+                    oilLifePercent = dto.oilLifePercent ?: _vehicleState.value.diagnostics.oilLifePercent,
+                    activeDtcCodes = dto.dtcCodes,
                     lastScanTimestamp = System.currentTimeMillis(),
-                    activeDtcCodes = emptyList(),
-                    checkEngineOn = false,
-                    scanStatusMessage = "Live OBD-II Telematics Scan Complete: 0 Fault Codes Found"
+                    scanStatusMessage = if (dto.dtcCodes.isEmpty()) "All ECU modules report clean status" else "Active DTC codes detected: ${dto.dtcCodes.joinToString()}"
                 )
-            )
-            NotificationHelper.sendAlert(
-                context,
-                108,
-                "OBD-II Scan Complete",
-                "All powertrain, transmission, and chassis modules verified healthy (0 DTCs)."
-            )
-        }
-    }
 
-    fun clearDiagnosticTroubleCodes() {
-        scope.launch {
-            dispatchTelematicsCommand("DTC_CLEAR_CODES")
+                _vehicleState.value = _vehicleState.value.copy(
+                    cloudConfig = _vehicleState.value.cloudConfig.copy(
+                        isSyncing = false,
+                        isConnected = true,
+                        lastHttpCode = response.code(),
+                        lastLatencyMs = latency,
+                        lastErrorMessage = null,
+                        lastSyncTimestamp = System.currentTimeMillis(),
+                        lastExecutedCommand = "Telematics Sync (200 OK)"
+                    ),
+                    engineState = mappedEngine,
+                    lockState = mappedLock,
+                    odometerMiles = dto.odometerMiles ?: _vehicleState.value.odometerMiles,
+                    isOdometerAvailable = dto.odometerMiles != null,
+                    fuelPercent = dto.fuelLevelPercent ?: _vehicleState.value.fuelPercent,
+                    isFuelAvailable = dto.fuelLevelPercent != null,
+                    lastReportTimestamp = dto.timestamp ?: System.currentTimeMillis(),
+                    batteryHealth = updatedBattery,
+                    tpms = updatedTpms,
+                    location = updatedLocation,
+                    diagnostics = updatedDiagnostics
+                )
+                true
+            } else {
+                _vehicleState.value = _vehicleState.value.copy(
+                    cloudConfig = _vehicleState.value.cloudConfig.copy(
+                        isSyncing = false,
+                        lastHttpCode = response.code(),
+                        lastLatencyMs = latency,
+                        lastErrorMessage = "HTTP ${response.code()}: ${response.message()}",
+                        lastSyncTimestamp = System.currentTimeMillis()
+                    )
+                )
+                false
+            }
+        } catch (e: Exception) {
+            val latency = System.currentTimeMillis() - startTime
             _vehicleState.value = _vehicleState.value.copy(
-                diagnostics = _vehicleState.value.diagnostics.copy(
-                    activeDtcCodes = emptyList(),
-                    checkEngineOn = false,
-                    scanStatusMessage = "DTC Codes Cleared & Readiness Monitors Reset"
+                cloudConfig = _vehicleState.value.cloudConfig.copy(
+                    isSyncing = false,
+                    lastHttpCode = null,
+                    lastLatencyMs = latency,
+                    lastErrorMessage = "${e.javaClass.simpleName}: ${e.localizedMessage ?: "Gateway connection error"}",
+                    lastSyncTimestamp = System.currentTimeMillis()
                 )
             )
+            false
         }
     }
 
-    fun refreshVehicleGpsLocation() {
-        scope.launch {
-            dispatchTelematicsCommand("QUERY_GPS_LOCATION")
-            NotificationHelper.sendAlert(
-                context,
-                109,
-                "Vehicle GPS Refreshed",
-                "Position verified: ${_vehicleState.value.location.latitude}, ${_vehicleState.value.location.longitude}"
-            )
-        }
-    }
+    // ----------------- Real GPS & Geofence Handling -----------------
 
     fun updateVehicleLocationFromGps(lat: Double, lng: Double, address: String? = null) {
         val addr = address ?: "Current GPS (${String.format(java.util.Locale.US, "%.4f, %.4f", lat, lng)})"
         _vehicleState.value = _vehicleState.value.copy(
             location = _vehicleState.value.location.copy(
+                isAvailable = true,
                 latitude = lat,
                 longitude = lng,
                 address = addr,
                 lastUpdatedTimestamp = System.currentTimeMillis()
             )
         )
-        if (_vehicleState.value.geofence.isEnabled) {
+
+        val geofence = _vehicleState.value.geofence
+        if (geofence.isEnabled && geofence.centerLatitude != 0.0 && geofence.centerLongitude != 0.0) {
             val dist = LocationHelper.calculateDistanceMeters(
                 lat,
                 lng,
-                _vehicleState.value.geofence.centerLatitude,
-                _vehicleState.value.geofence.centerLongitude
+                geofence.centerLatitude,
+                geofence.centerLongitude
             )
-            val isBreached = dist > _vehicleState.value.geofence.radiusMeters
+            val isBreached = dist > geofence.radiusMeters
             _vehicleState.value = _vehicleState.value.copy(
-                geofence = _vehicleState.value.geofence.copy(
+                geofence = geofence.copy(
                     isBreached = isBreached,
                     theftAlarmActive = isBreached
                 ),
@@ -839,8 +1021,8 @@ class VehicleRepository(
                 NotificationHelper.sendAlert(
                     context,
                     107,
-                    "🚨 GEOFENCE THEFT ALERT!",
-                    "Vehicle moved outside '${_vehicleState.value.geofence.safeZoneName}' boundary! Distance: ${dist.toInt()}m.",
+                    "🚨 GEOFENCE BREACH ALERT",
+                    "Vehicle is ${dist.toInt()}m outside '${geofence.safeZoneName}'.",
                     isUrgent = true
                 )
             }
@@ -848,6 +1030,9 @@ class VehicleRepository(
     }
 
     fun updateGeofence(enabled: Boolean, radiusMeters: Int, safeZoneName: String) {
+        val centerLat = _vehicleState.value.location.latitude
+        val centerLng = _vehicleState.value.location.longitude
+
         _vehicleState.value = _vehicleState.value.copy(
             geofence = _vehicleState.value.geofence.copy(
                 isEnabled = enabled,
@@ -855,18 +1040,27 @@ class VehicleRepository(
                 safeZoneName = safeZoneName
             )
         )
+
+        scope.launch {
+            preferencesManager.saveGeofenceSettings(
+                enabled = enabled,
+                radiusMeters = radiusMeters,
+                name = safeZoneName,
+                lat = centerLat,
+                lng = centerLng
+            )
+        }
     }
 
     fun setVehicleLocationAsSafeZone() {
         val loc = _vehicleState.value.location
-        _vehicleState.value = _vehicleState.value.copy(
-            geofence = _vehicleState.value.geofence.copy(
-                centerLatitude = loc.latitude,
-                centerLongitude = loc.longitude,
-                isBreached = false,
-                theftAlarmActive = false
+        if (loc.isAvailable && loc.latitude != 0.0) {
+            updateGeofence(
+                enabled = true,
+                radiusMeters = _vehicleState.value.geofence.radiusMeters,
+                safeZoneName = "Vehicle Safe Spot"
             )
-        )
+        }
     }
 
     fun dismissTheftAlarm() {
@@ -879,6 +1073,12 @@ class VehicleRepository(
         )
     }
 
+    fun refreshVehicleGpsLocation() {
+        scope.launch {
+            syncWithCloudApi()
+        }
+    }
+
     fun updateCloudConfig(apiUrl: String, token: String) {
         _vehicleState.value = _vehicleState.value.copy(
             cloudConfig = _vehicleState.value.cloudConfig.copy(
@@ -888,120 +1088,14 @@ class VehicleRepository(
         )
     }
 
-    private suspend fun dispatchTelematicsCommand(
-        action: String,
-        durationMinutes: Int? = null,
-        tempF: Int? = null
-    ): Boolean = withContext(Dispatchers.IO) {
-        val startTime = System.currentTimeMillis()
-        try {
-            val service = ApiClient.createService(_vehicleState.value.cloudConfig.apiUrl)
-            val token = "Bearer ${_vehicleState.value.cloudConfig.apiToken}"
-            val req = RemoteControlRequest(
-                vin = _vehicleState.value.vin,
-                action = action,
-                durationMinutes = durationMinutes,
-                climateTempF = tempF
-            )
-            val response = service.executeControlCommand(token, req)
-            val latency = System.currentTimeMillis() - startTime
-            val code = response.code()
-            _vehicleState.value = _vehicleState.value.copy(
-                cloudConfig = _vehicleState.value.cloudConfig.copy(
-                    lastHttpCode = code,
-                    lastLatencyMs = latency,
-                    lastExecutedCommand = "$action ($code)",
-                    lastErrorMessage = if (response.isSuccessful) null else "HTTP $code: ${response.message()}",
-                    lastSyncTimestamp = System.currentTimeMillis()
-                )
-            )
-            response.isSuccessful
-        } catch (e: Exception) {
-            val latency = System.currentTimeMillis() - startTime
-            _vehicleState.value = _vehicleState.value.copy(
-                cloudConfig = _vehicleState.value.cloudConfig.copy(
-                    lastHttpCode = null,
-                    lastLatencyMs = latency,
-                    lastExecutedCommand = "$action",
-                    lastErrorMessage = "${e.javaClass.simpleName}: ${e.localizedMessage ?: "Network connection error"}",
-                    lastSyncTimestamp = System.currentTimeMillis()
-                )
-            )
-            false
-        }
-    }
-
-    suspend fun syncWithCloudApi(): Boolean = withContext(Dispatchers.IO) {
+    fun startLiveDrive(startAddress: String, destAddress: String, tag: String) {
         _vehicleState.value = _vehicleState.value.copy(
-            cloudConfig = _vehicleState.value.cloudConfig.copy(isSyncing = true)
-        )
-        val startTime = System.currentTimeMillis()
-        try {
-            val service = ApiClient.createService(_vehicleState.value.cloudConfig.apiUrl)
-            val token = "Bearer ${_vehicleState.value.cloudConfig.apiToken}"
-            val response = service.getVehicleTelematics(token, _vehicleState.value.vin)
-            val latency = System.currentTimeMillis() - startTime
-
-            if (response.isSuccessful && response.body() != null) {
-                val dto = response.body()!!
-                _vehicleState.value = _vehicleState.value.copy(
-                    cloudConfig = _vehicleState.value.cloudConfig.copy(
-                        isSyncing = false,
-                        isConnected = true,
-                        lastHttpCode = response.code(),
-                        lastLatencyMs = latency,
-                        lastErrorMessage = null,
-                        lastSyncTimestamp = System.currentTimeMillis(),
-                        lastExecutedCommand = "Telematics Sync (200 OK)"
-                    ),
-                    odometerMiles = dto.odometerMiles,
-                    fuelPercent = dto.fuelLevelPercent,
-                    batteryHealth = _vehicleState.value.batteryHealth.copy(
-                        voltage = dto.batteryVoltage,
-                        stateOfHealthPercent = dto.batterySoh
-                    ),
-                    tpms = _vehicleState.value.tpms.copy(
-                        frontLeft = _vehicleState.value.tpms.frontLeft.copy(currentPsi = dto.tpmsFlPsi),
-                        frontRight = _vehicleState.value.tpms.frontRight.copy(currentPsi = dto.tpmsFrPsi),
-                        rearLeft = _vehicleState.value.tpms.rearLeft.copy(currentPsi = dto.tpmsRlPsi),
-                        rearRight = _vehicleState.value.tpms.rearRight.copy(currentPsi = dto.tpmsRrPsi)
-                    ),
-                    location = _vehicleState.value.location.copy(
-                        latitude = dto.latitude,
-                        longitude = dto.longitude
-                    ),
-                    diagnostics = _vehicleState.value.diagnostics.copy(
-                        oilLifePercent = dto.oilLifePercent,
-                        activeDtcCodes = dto.dtcCodes
-                    )
-                )
-                true
-            } else {
-                _vehicleState.value = _vehicleState.value.copy(
-                    cloudConfig = _vehicleState.value.cloudConfig.copy(
-                        isSyncing = false,
-                        lastHttpCode = response.code(),
-                        lastLatencyMs = latency,
-                        lastErrorMessage = "HTTP ${response.code()}: ${response.message()}",
-                        lastSyncTimestamp = System.currentTimeMillis(),
-                        lastExecutedCommand = "Sync (HTTP ${response.code()})"
-                    )
-                )
-                false
-            }
-        } catch (e: Exception) {
-            val latency = System.currentTimeMillis() - startTime
-            _vehicleState.value = _vehicleState.value.copy(
-                cloudConfig = _vehicleState.value.cloudConfig.copy(
-                    isSyncing = false,
-                    lastHttpCode = null,
-                    lastLatencyMs = latency,
-                    lastErrorMessage = "${e.javaClass.simpleName}: ${e.localizedMessage ?: "Unable to reach vehicle cloud gateway"}",
-                    lastSyncTimestamp = System.currentTimeMillis(),
-                    lastExecutedCommand = "Sync (${e.javaClass.simpleName})"
-                )
+            activeDriveSession = ActiveDriveSession(
+                startTimeMillis = System.currentTimeMillis(),
+                startAddress = startAddress,
+                destinationAddress = destAddress,
+                tripTag = tag
             )
-            false
-        }
+        )
     }
 }

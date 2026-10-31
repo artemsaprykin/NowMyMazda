@@ -20,11 +20,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AcUnit
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.ElectricBolt
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.FlightTakeoff
+import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.LocalGasStation
@@ -65,6 +71,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.CommandExecutionState
 import com.example.data.model.EngineState
 import com.example.data.model.LockState
 import com.example.data.model.PressureStatus
@@ -108,9 +115,9 @@ fun DashboardScreen(
 
     var selectedDuration by remember { mutableIntStateOf(15) }
     var selectedTemp by remember { mutableIntStateOf(72) }
-    var heatedSeats by remember { mutableStateOf(true) }
 
     val colors = AppTheme.colors
+    val isConnected = vehicleState.isConnected && vehicleState.isVehicleSelected
 
     LazyColumn(
         modifier = modifier
@@ -120,7 +127,7 @@ fun DashboardScreen(
     ) {
         item {
             Spacer(modifier = Modifier.height(4.dp))
-            // Cloud Connection Header
+            // Cloud Connection Header Banner
             Surface(
                 shape = RoundedCornerShape(14.dp),
                 color = colors.surface,
@@ -140,18 +147,23 @@ fun DashboardScreen(
                             modifier = Modifier
                                 .size(8.dp)
                                 .clip(CircleShape)
-                                .background(DiagnosticGreen)
+                                .background(if (isConnected) DiagnosticGreen else DiagnosticAmber)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
                             Text(
-                                text = "MyMazda Connected: ${vehicleState.myMazdaAccount.email}",
+                                text = if (isConnected) "Connected: ${vehicleState.myMazdaAccount.email}" else "No Vehicle Connected",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = colors.textPrimary
                             )
                             Text(
-                                text = "TCU 4G LTE • ${vehicleState.myMazdaAccount.region} • Tap for Pairing",
+                                text = if (isConnected) {
+                                    val lastSyncStr = if (vehicleState.cloudConfig.lastSyncTimestamp > 0L) "Updated Just Now" else "Live"
+                                    "${vehicleState.nickname} • ${vehicleState.cloudConfig.regionEndpoint} • $lastSyncStr"
+                                } else {
+                                    "Tap to link your MyMazda account or cv/mcs bridge"
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 fontSize = 11.sp,
                                 color = colors.textSecondary
@@ -183,14 +195,144 @@ fun DashboardScreen(
             }
         }
 
+        // Live Command Execution State Card
+        when (val cmdState = vehicleState.commandExecutionState) {
+            is CommandExecutionState.Pending -> {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF141F2B)),
+                        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(ElectricCyan)),
+                        modifier = Modifier.fillMaxWidth().testTag("command_pending_card")
+                    ) {
+                        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = ElectricCyan)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(cmdState.action, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = ElectricCyan)
+                                Text(cmdState.message, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+            is CommandExecutionState.Accepted -> {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A261E)),
+                        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(DiagnosticGreen)),
+                        modifier = Modifier.fillMaxWidth().testTag("command_accepted_card")
+                    ) {
+                        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.HourglassTop, contentDescription = null, tint = DiagnosticGreen, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("${cmdState.action} - Accepted by Cloud", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = DiagnosticGreen)
+                                Text(cmdState.message, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+            is CommandExecutionState.Confirmed -> {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF142B1F)),
+                        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(DiagnosticGreen)),
+                        modifier = Modifier.fillMaxWidth().testTag("command_confirmed_card")
+                    ) {
+                        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = DiagnosticGreen, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("${cmdState.action} Confirmed", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = DiagnosticGreen)
+                                Text(cmdState.message, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+            is CommandExecutionState.Failed -> {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF3B1519)),
+                        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(DiagnosticRed)),
+                        modifier = Modifier.fillMaxWidth().testTag("command_failed_card")
+                    ) {
+                        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Error, contentDescription = null, tint = DiagnosticRed, modifier = Modifier.size(22.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("${cmdState.action} Failed", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                                Text(cmdState.errorMessage, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+            CommandExecutionState.Idle -> {}
+        }
+
+        // Welcome / Connect Vehicle Banner if no vehicle connected
+        if (!vehicleState.isVehicleSelected) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = colors.surface),
+                    border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(SoulRedPrimary)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(SoulRedDark),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.DirectionsCar, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("Link Your Mazda Vehicle", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = colors.textPrimary)
+                                Text("No vehicle currently linked or selected", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Connect your MyMazda credentials or self-hosted cv/mcs daemon to view genuine battery voltage, TPMS telemetry, fuel range, and actuate remote commands.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.textSecondary
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Button(
+                            onClick = onOpenConnectionScreen,
+                            colors = ButtonDefaults.buttonColors(containerColor = SoulRedPrimary),
+                            modifier = Modifier.fillMaxWidth().testTag("dashboard_connect_vehicle_btn")
+                        ) {
+                            Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Connect Vehicle Now")
+                        }
+                    }
+                }
+            }
+        }
+
         // Active Alert Banner if any tire or battery has issue
         item {
-            val hasLowTire = vehicleState.tpms.frontLeft.status != PressureStatus.NORMAL ||
+            val hasLowTire = vehicleState.tpms.isAvailable && (
+                    vehicleState.tpms.frontLeft.status != PressureStatus.NORMAL ||
                     vehicleState.tpms.frontRight.status != PressureStatus.NORMAL ||
                     vehicleState.tpms.rearLeft.status != PressureStatus.NORMAL ||
                     vehicleState.tpms.rearRight.status != PressureStatus.NORMAL
+            )
 
-            val hasBatteryWarning = vehicleState.batteryHealth.voltage < 12.0
+            val hasBatteryWarning = vehicleState.batteryHealth.isAvailable && vehicleState.batteryHealth.voltage < 12.0
 
             if (hasLowTire || hasBatteryWarning || vehicleState.geofence.theftAlarmActive) {
                 Card(
@@ -255,6 +397,8 @@ fun DashboardScreen(
 
         // Remote Controls Grid
         item {
+            val isCommandsEnabled = vehicleState.isVehicleSelected && vehicleState.commandExecutionState !is CommandExecutionState.Pending
+
             Text(
                 text = "Remote Controls",
                 style = MaterialTheme.typography.titleSmall,
@@ -301,11 +445,9 @@ fun DashboardScreen(
                                 )
                                 Text(
                                     text = if (vehicleState.engineState == EngineState.RUNNING) {
-                                        val remMins = vehicleState.remoteStart.remainingSeconds / 60
-                                        val remSecs = vehicleState.remoteStart.remainingSeconds % 60
-                                        "Auto-stop in ${remMins}m ${remSecs}s • Climate ${vehicleState.remoteStart.targetTempF}°F"
+                                        "Verified running by TCU modem"
                                     } else {
-                                        "Secure cloud ignition with climate preset"
+                                        "Authenticated cloud ignition request"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = colors.textSecondary
@@ -316,7 +458,6 @@ fun DashboardScreen(
 
                     if (vehicleState.engineState != EngineState.RUNNING) {
                         Spacer(modifier = Modifier.height(14.dp))
-                        // Climate & Timer selectors
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -372,29 +513,31 @@ fun DashboardScreen(
 
                         Button(
                             onClick = { onRemoteStart(selectedDuration, selectedTemp) },
+                            enabled = isCommandsEnabled,
                             colors = ButtonDefaults.buttonColors(containerColor = SoulRedPrimary),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(48.dp)
                                 .testTag("remote_start_btn")
                         ) {
-                            Icon(imageVector = Icons.Default.Key, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.ElectricBolt, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Start Engine (${selectedDuration} min • ${selectedTemp}°F)", fontWeight = FontWeight.Bold)
+                            Text("Start Engine (${selectedDuration} min @ ${selectedTemp}°F)")
                         }
                     } else {
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(
                             onClick = onEngineStop,
+                            enabled = isCommandsEnabled,
                             colors = ButtonDefaults.buttonColors(containerColor = DiagnosticRed),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(48.dp)
-                                .testTag("stop_engine_btn")
+                                .testTag("remote_stop_btn")
                         ) {
-                            Icon(imageVector = Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Turn Off Engine", fontWeight = FontWeight.Bold)
+                            Text("Stop Engine Now")
                         }
                     }
                 }
@@ -410,8 +553,13 @@ fun DashboardScreen(
                 QuickActionButton(
                     icon = if (vehicleState.lockState == LockState.LOCKED) Icons.Default.LockOpen else Icons.Default.Lock,
                     label = if (vehicleState.lockState == LockState.LOCKED) "Unlock" else "Lock Doors",
-                    subtext = if (vehicleState.lockState == LockState.LOCKED) "Secured" else "Open",
+                    subtext = when (vehicleState.lockState) {
+                        LockState.LOCKED -> "Secured"
+                        LockState.UNLOCKED -> "Unlocked"
+                        LockState.UNKNOWN -> "Unknown"
+                    },
                     isActive = vehicleState.lockState == LockState.LOCKED,
+                    enabled = isCommandsEnabled,
                     modifier = Modifier.weight(1f),
                     testTag = "lock_toggle_btn",
                     onClick = onDoorToggle
@@ -423,6 +571,7 @@ fun DashboardScreen(
                     subtext = if (vehicleState.hazardLightsActive) "Flashing" else "Off",
                     isActive = vehicleState.hazardLightsActive,
                     activeColor = DiagnosticAmber,
+                    enabled = isCommandsEnabled,
                     modifier = Modifier.weight(1f),
                     testTag = "hazard_toggle_btn",
                     onClick = onHazardToggle
@@ -441,6 +590,7 @@ fun DashboardScreen(
                     subtext = if (vehicleState.hornActive) "Honking" else "Horn & Flash",
                     isActive = vehicleState.hornActive,
                     activeColor = DiagnosticRed,
+                    enabled = isCommandsEnabled,
                     modifier = Modifier.weight(1f),
                     testTag = "panic_horn_btn",
                     onClick = onPanicHorn
@@ -452,6 +602,7 @@ fun DashboardScreen(
                     subtext = if (vehicleState.doors.isTrunkOpen) "Trunk Open" else "Closed",
                     isActive = vehicleState.doors.isTrunkOpen,
                     activeColor = ElectricCyan,
+                    enabled = isCommandsEnabled,
                     modifier = Modifier.weight(1f),
                     testTag = "trunk_toggle_btn",
                     onClick = onTrunkToggle
@@ -487,7 +638,7 @@ fun DashboardScreen(
                             Text("Fuel Level", style = MaterialTheme.typography.bodyMedium, color = colors.textPrimary)
                         }
                         Text(
-                            text = "${vehicleState.fuelPercent}% • ${vehicleState.estimatedRangeMiles} mi range",
+                            text = if (vehicleState.isFuelAvailable) "${vehicleState.fuelPercent}% • ${vehicleState.estimatedRangeMiles} mi range" else "Unavailable",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = colors.textPrimary
@@ -495,7 +646,7 @@ fun DashboardScreen(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     LinearProgressIndicator(
-                        progress = { vehicleState.fuelPercent / 100f },
+                        progress = { if (vehicleState.isFuelAvailable) (vehicleState.fuelPercent / 100f).coerceIn(0f, 1f) else 0f },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(8.dp)
@@ -514,18 +665,18 @@ fun DashboardScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.ElectricBolt, contentDescription = null, tint = DiagnosticGreen, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("12V Battery Health (SoH)", style = MaterialTheme.typography.bodyMedium, color = colors.textPrimary)
+                            Text("12V Battery Health", style = MaterialTheme.typography.bodyMedium, color = colors.textPrimary)
                         }
                         Text(
-                            text = "${vehicleState.batteryHealth.voltage}V • ${vehicleState.batteryHealth.stateOfHealthPercent}% SoH",
+                            text = if (vehicleState.batteryHealth.isAvailable) "${vehicleState.batteryHealth.voltage}V • ${vehicleState.batteryHealth.stateOfHealthPercent}% SoH" else "Unavailable",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            color = if (vehicleState.batteryHealth.voltage >= 12.2) DiagnosticGreen else DiagnosticAmber
+                            color = if (vehicleState.batteryHealth.isAvailable && vehicleState.batteryHealth.voltage >= 12.2) DiagnosticGreen else DiagnosticAmber
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     LinearProgressIndicator(
-                        progress = { vehicleState.batteryHealth.stateOfHealthPercent / 100f },
+                        progress = { if (vehicleState.batteryHealth.isAvailable) (vehicleState.batteryHealth.stateOfHealthPercent / 100f).coerceIn(0f, 1f) else 0f },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(8.dp)
@@ -551,30 +702,6 @@ fun DashboardScreen(
             onDismiss = { selectedTire = null }
         )
     }
-
-    // Modal Cloud Config Dialog
-    if (showCloudDialog) {
-        CloudApiConfigDialog(
-            config = vehicleState.cloudConfig,
-            onSave = onSaveCloudConfig,
-            onTestPing = onSyncCloud,
-            onDismiss = { showCloudDialog = false }
-        )
-    }
-
-    // Modal MyMazda Connection & In-Car Pairing Assistant
-    if (showMyMazdaDialog) {
-        MyMazdaConnectDialog(
-            account = vehicleState.myMazdaAccount,
-            onLinkAccount = { email, vin, region ->
-                onLinkMyMazda(email, vin, region)
-            },
-            onPairWithInCarCode = { code ->
-                onPairWithInCarCode(code)
-            },
-            onDismiss = { showMyMazdaDialog = false }
-        )
-    }
 }
 
 @Composable
@@ -583,57 +710,56 @@ fun QuickActionButton(
     label: String,
     subtext: String,
     isActive: Boolean,
-    activeColor: Color = DiagnosticGreen,
     modifier: Modifier = Modifier,
-    testTag: String,
+    activeColor: Color = SoulRedPrimary,
+    enabled: Boolean = true,
+    testTag: String = "",
     onClick: () -> Unit
 ) {
     val colors = AppTheme.colors
+
     Surface(
-        modifier = modifier
-            .testTag(testTag)
-            .clip(RoundedCornerShape(16.dp))
-            .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
-        color = colors.surface,
+        color = if (isActive) activeColor.copy(alpha = 0.2f) else colors.surface,
         border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            if (isActive) activeColor.copy(alpha = 0.5f) else colors.border
-        )
+            width = if (isActive) 1.5.dp else 1.dp,
+            color = if (isActive) activeColor else colors.border
+        ),
+        modifier = modifier
+            .clickable(enabled = enabled) { onClick() }
+            .testTag(testTag)
     ) {
-        Row(
+        Column(
             modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.Center
         ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(36.dp)
                     .clip(CircleShape)
-                    .background(if (isActive) activeColor.copy(alpha = 0.2f) else colors.surfaceElevated),
+                    .background(if (isActive) activeColor else colors.surfaceElevated),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = if (isActive) activeColor else colors.textSecondary,
-                    modifier = Modifier.size(20.dp)
+                    tint = if (isActive) Color.White else colors.textSecondary,
+                    modifier = Modifier.size(18.dp)
                 )
             }
-            Spacer(modifier = Modifier.width(10.dp))
-            Column {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.textPrimary
-                )
-                Text(
-                    text = subtext,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontSize = 11.sp,
-                    color = if (isActive) activeColor else colors.textSecondary
-                )
-            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (enabled) colors.textPrimary else colors.textSecondary
+            )
+            Text(
+                text = subtext,
+                style = MaterialTheme.typography.bodySmall,
+                fontSize = 11.sp,
+                color = if (isActive) activeColor else colors.textSecondary
+            )
         }
     }
 }
