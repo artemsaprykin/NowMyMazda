@@ -167,5 +167,92 @@ class ExampleRobolectricTest {
     assertTrue("Zero active DTC codes initially", state.diagnostics.activeDtcCodes.isEmpty())
     assertEquals(false, state.diagnostics.checkEngineOn)
   }
+
+  @Test
+  fun `verify MazdaRegionalCluster mapping and fallback`() {
+    val mnao = com.example.data.remote.MazdaRegionalCluster.fromCode("MNAO")
+    assertEquals(com.example.data.remote.MazdaRegionalCluster.MNAO, mnao)
+    assertEquals("https://app-api.mazdausa.com/", mnao.primaryBaseUrl)
+
+    val mme = com.example.data.remote.MazdaRegionalCluster.fromCode("MME")
+    assertEquals(com.example.data.remote.MazdaRegionalCluster.MME, mme)
+    assertEquals("https://eu.mzda.net/api/", mme.primaryBaseUrl)
+
+    val mjo = com.example.data.remote.MazdaRegionalCluster.fromCode("MJO")
+    assertEquals(com.example.data.remote.MazdaRegionalCluster.MJO, mjo)
+    assertEquals("https://jp.mzda.net/api/", mjo.primaryBaseUrl)
+
+    val bridge = com.example.data.remote.MazdaRegionalCluster.fromCode("BRIDGE")
+    assertEquals(com.example.data.remote.MazdaRegionalCluster.CV_MCS_BRIDGE, bridge)
+    assertEquals("http://10.0.2.2:8080/api/", bridge.primaryBaseUrl)
+
+    // Fallback to MNAO on invalid or empty code
+    val fallback = com.example.data.remote.MazdaRegionalCluster.fromCode("INVALID_REGION")
+    assertEquals(com.example.data.remote.MazdaRegionalCluster.MNAO, fallback)
+  }
+
+  @Test
+  fun `verify MazdaSecurityCrypto RSA password encryption with real keypair`() {
+    // Generate valid RSA 2048-bit keypair
+    val keyPairGenerator = java.security.KeyPairGenerator.getInstance("RSA")
+    keyPairGenerator.initialize(2048)
+    val keyPair = keyPairGenerator.genKeyPair()
+    val rawPubKeyBase64 = android.util.Base64.encodeToString(keyPair.public.encoded, android.util.Base64.NO_WRAP)
+    val pemPublicKey = "-----BEGIN PUBLIC KEY-----\n$rawPubKeyBase64\n-----END PUBLIC KEY-----"
+
+    val secretPassword = "ZoomZoomMazda2025!"
+    val encrypted = com.example.data.remote.MazdaSecurityCrypto.encryptPasswordWithPublicKey(secretPassword, pemPublicKey)
+
+    assertTrue("Encrypted password must not be empty", encrypted.isNotEmpty())
+    assertTrue("Encrypted output should not be equal to plain password", encrypted != secretPassword)
+
+    // Decrypt with private key to prove RSA ECB PKCS1Padding round-trip
+    val cipher = javax.crypto.Cipher.getInstance("RSA/ECB/PKCS1Padding")
+    cipher.init(javax.crypto.Cipher.DECRYPT_MODE, keyPair.private)
+    val decryptedBytes = cipher.doFinal(android.util.Base64.decode(encrypted, android.util.Base64.DEFAULT))
+    val decryptedPassword = String(decryptedBytes, Charsets.UTF_8)
+
+    assertEquals("Decrypted password must match original secret", secretPassword, decryptedPassword)
+  }
+
+  @Test
+  fun `verify MazdaSecurityCrypto fallback on malformed public key`() {
+    val plainPassword = "MyTestPassword"
+    val result = com.example.data.remote.MazdaSecurityCrypto.encryptPasswordWithPublicKey(plainPassword, "NOT_A_VALID_KEY")
+    // Fallback encodes password in Base64
+    val expectedFallback = android.util.Base64.encodeToString(plainPassword.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+    assertEquals(expectedFallback, result)
+  }
+
+  @Test
+  fun `verify MyMazdaAccount API permission checklist requirements`() {
+    val state = VehicleState()
+    val account = state.myMazdaAccount
+
+    // Verify all 4 required permissions are tracked in state
+    assertTrue("Data sharing agreement should be tracked", account.dataSharingAgreementGranted)
+    assertTrue("Remote control entitlement should be tracked", account.remoteControlEntitlementActive)
+    assertTrue("In-car verification should be tracked", account.inCarVerificationCompleted)
+    assertTrue("Safety interlocks should be clear", account.safetyInterlocksClear)
+
+    val discovered = com.example.data.model.DiscoveredVehicle(
+      vin = "JM3BPACL8N1102938",
+      modelName = "Mazda 3 2.5 Turbo AWD",
+      modelYear = 2023,
+      nickname = "Mazda 3 Hatchback",
+      isTcuPaired = true,
+      canRemoteControl = true
+    )
+    val updatedAccount = account.copy(
+      discoveredVehicles = listOf(discovered),
+      regionCode = "MNAO",
+      lastHandshakeStatus = "Ready"
+    )
+
+    assertEquals(1, updatedAccount.discoveredVehicles.size)
+    assertEquals("JM3BPACL8N1102938", updatedAccount.discoveredVehicles.first().vin)
+    assertEquals("MNAO", updatedAccount.regionCode)
+    assertEquals("Ready", updatedAccount.lastHandshakeStatus)
+  }
 }
 

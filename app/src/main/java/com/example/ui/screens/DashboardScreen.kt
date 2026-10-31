@@ -99,7 +99,7 @@ fun DashboardScreen(
     onSaveCloudConfig: (String, String) -> Unit,
     onLinkMyMazda: (String, String, String) -> Unit = { _, _, _ -> },
     onPairWithInCarCode: (String) -> Unit = {},
-    onNavigateToConnection: () -> Unit = {},
+    onOpenConnectionScreen: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTire by remember { mutableStateOf<TireInfo?>(null) }
@@ -127,7 +127,7 @@ fun DashboardScreen(
                 border = androidx.compose.foundation.BorderStroke(1.dp, colors.border),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onNavigateToConnection() }
+                    .clickable { onOpenConnectionScreen() }
                     .testTag("cloud_status_banner")
             ) {
                 Row(

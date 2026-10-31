@@ -128,22 +128,36 @@ data class ActiveDriveSession(
     val tripTag: String = "Commute"
 )
 
+data class DiscoveredVehicle(
+    val vin: String,
+    val modelName: String,
+    val modelYear: Int,
+    val nickname: String,
+    val isTcuPaired: Boolean = true,
+    val canRemoteControl: Boolean = true,
+    val isSelected: Boolean = false
+)
+
 data class MyMazdaAccount(
     val email: String = "metra2007@meta.ua",
     val isLinked: Boolean = true,
-    val region: String = "North America (MNAO)",
+    val region: String = "North America (MNAO - Mazda USA/Canada)",
+    val regionCode: String = "MNAO",
     val customerId: String = "MZD-8923019",
-    val vehicleCount: Int = 1,
+    val vehicleCount: Int = 2,
     val lastLoginTimestamp: Long = System.currentTimeMillis(),
     val isTcuPaired: Boolean = true,
     val vehicleVin: String = "JM3KFBDM9P0128934",
-    val sessionToken: String = "mzd_live_sec_892348a0f9b31",
-    val tokenExpiresAt: Long = System.currentTimeMillis() + 86400_000L,
-    val remoteStartPermitted: Boolean = true,
-    val doorLockPermitted: Boolean = true,
-    val telematicsPermitted: Boolean = true,
-    val gpsTrackingPermitted: Boolean = true,
-    val dtcDiagnosticsPermitted: Boolean = true
+    val discoveredVehicles: List<DiscoveredVehicle> = listOf(
+        DiscoveredVehicle("JM3KFBDM9P0128934", "Mazda CX-50 Turbo AWD", 2024, "Soul Red CX-50", isTcuPaired = true, canRemoteControl = true, isSelected = true),
+        DiscoveredVehicle("JM1BP2M79N1109482", "Mazda 3 Hatchback Premium", 2023, "Polymetal Gray Hatch", isTcuPaired = true, canRemoteControl = true, isSelected = false)
+    ),
+    // Required Connected Services & In-Vehicle API Permissions
+    val dataSharingAgreementGranted: Boolean = true,
+    val remoteControlEntitlementActive: Boolean = true,
+    val inCarVerificationCompleted: Boolean = true,
+    val safetyInterlocksClear: Boolean = true,
+    val lastHandshakeStatus: String = "Authenticated via Mazda Connected Services Bridge (HTTP 200 OK)"
 )
 
 data class VehicleState(

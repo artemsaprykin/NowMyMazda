@@ -84,7 +84,7 @@ fun SettingsScreen(
     onUpdateSecurityConfig: (BiometricSecurityConfig) -> Unit,
     onSaveCloudConfig: (String, String) -> Unit,
     onSyncCloud: () -> Unit,
-    onNavigateToConnection: () -> Unit = {},
+    onOpenVehicleConnection: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = AppTheme.colors
@@ -287,15 +287,15 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Button(
-                            onClick = { showMyMazdaDialog = true },
+                            onClick = onOpenVehicleConnection,
                             colors = ButtonDefaults.buttonColors(containerColor = SoulRedPrimary),
                             modifier = Modifier
-                                .weight(1f)
-                                .testTag("open_mymazda_modal_btn")
+                                .weight(1.3f)
+                                .testTag("open_vehicle_connection_btn")
                         ) {
                             Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Account & Pairing", fontSize = 12.sp)
+                            Text("Vehicle Connection", fontSize = 12.sp)
                         }
 
                         Button(
@@ -307,7 +307,7 @@ fun SettingsScreen(
                         ) {
                             Icon(Icons.Default.HelpOutline, contentDescription = null, tint = colors.textPrimary, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Instructions", color = colors.textPrimary, fontSize = 12.sp)
+                            Text("Fast Dialog", color = colors.textPrimary, fontSize = 12.sp)
                         }
                     }
                 }

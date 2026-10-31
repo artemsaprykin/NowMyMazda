@@ -342,7 +342,8 @@ fun MainAppScreen(
                     onSyncCloud = { viewModel.syncCloudApi() },
                     onSaveCloudConfig = { url, token -> viewModel.updateCloudConfig(url, token) },
                     onLinkMyMazda = { email, vin, region -> viewModel.linkMyMazdaAccount(email, vin, region) },
-                    onPairWithInCarCode = { code -> viewModel.pairWithInCarCode(code) }
+                    onPairWithInCarCode = { code -> viewModel.pairWithInCarCode(code) },
+                    onOpenConnectionScreen = { viewModel.selectTab(VehicleNavTab.CONNECTION) }
                 )
 
                 VehicleNavTab.DIAGNOSTICS -> DiagnosticsScreen(
@@ -392,8 +393,24 @@ fun MainAppScreen(
                     onPairInCarCode = { code -> viewModel.pairWithInCarCode(code) },
                     onUpdateSecurityConfig = { cfg -> viewModel.updateSecurityConfig(cfg) },
                     onSaveCloudConfig = { url, token -> viewModel.updateCloudConfig(url, token) },
-                    onSyncCloud = { viewModel.syncCloudApi() }
+                    onSyncCloud = { viewModel.syncCloudApi() },
+                    onOpenVehicleConnection = { viewModel.selectTab(VehicleNavTab.CONNECTION) }
                 )
+
+                VehicleNavTab.CONNECTION -> {
+                    BackHandler { viewModel.selectTab(VehicleNavTab.DASHBOARD) }
+                    VehicleConnectionScreen(
+                        vehicleState = vehicleState,
+                        onAuthenticate = { email, pass, region, customUrl, onComplete ->
+                            viewModel.authenticateWithMazdaConnectedServices(email, pass, region, customUrl, onComplete)
+                        },
+                        onSelectVehicle = { vin -> viewModel.selectActiveVehicle(vin) },
+                        onPairWithInCarCode = { code -> viewModel.pairWithInCarCode(code) },
+                        onTestHandshake = { onResult -> viewModel.testConnectionHandshake(onResult) },
+                        onDisconnect = { viewModel.disconnectMazdaAccount() },
+                        onBack = { viewModel.selectTab(VehicleNavTab.DASHBOARD) }
+                    )
+                }
             }
         }
 

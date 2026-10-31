@@ -306,25 +306,43 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
         _themeMode.value = mode
     }
 
-    fun authenticateMcsBridge(
+    fun linkMyMazdaAccount(email: String, vin: String, region: String) {
+        repository.linkMyMazdaAccount(email, vin, region)
+    }
+
+    fun authenticateWithMazdaConnectedServices(
         email: String,
-        pass: String,
-        region: String,
-        vin: String?,
+        password: String,
+        regionCode: String,
+        customBaseUrl: String? = null,
         onComplete: (Boolean, String) -> Unit
     ) {
         viewModelScope.launch {
-            val res = repository.authenticateMcsBridge(email, pass, region, vin)
-            if (res.isSuccess) {
-                onComplete(true, res.getOrNull() ?: "Connected to Mazda Connected Services.")
-            } else {
-                onComplete(false, res.exceptionOrNull()?.message ?: "Failed to authenticate.")
-            }
+            val result = repository.authenticateWithMazdaConnectedServices(email, password, regionCode, customBaseUrl)
+            result.fold(
+                onSuccess = { list ->
+                    onComplete(true, "Successfully linked ${list.size} vehicle(s) from Mazda Connected Services.")
+                },
+                onFailure = { error ->
+                    onComplete(false, error.localizedMessage ?: "Failed to connect to Mazda cloud")
+                }
+            )
         }
     }
 
-    fun linkMyMazdaAccount(email: String, vin: String, region: String) {
-        repository.linkMyMazdaAccount(email, vin, region)
+    fun selectActiveVehicle(vin: String) {
+        repository.selectActiveVehicle(vin)
+    }
+
+    fun disconnectMazdaAccount() {
+        repository.disconnectMazdaAccount()
+    }
+
+    fun testConnectionHandshake(onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            val summary = repository.testConnectionHandshake()
+            onResult(summary)
+        }
     }
 
     fun pairWithInCarCode(code: String): Boolean {
