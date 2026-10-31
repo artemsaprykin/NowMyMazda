@@ -1,6 +1,5 @@
 package com.example.data.remote
 
-import android.util.Base64
 import com.squareup.moshi.Json
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -14,16 +13,13 @@ import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Path
-import java.security.KeyFactory
-import java.security.spec.X509EncodedKeySpec
 import java.util.concurrent.TimeUnit
-import javax.crypto.Cipher
 
 /**
- * Mazda Connected Services Regional Endpoints as implemented by:
- * - cv/mcs (Carlos Villela - https://github.com/cv/mcs)
- * - fano0001/home-assistant-mazda (pymazda - https://github.com/fano0001/home-assistant-mazda)
- * - tkarle/home-assistant-mazda (https://github.com/tkarle/home-assistant-mazda)
+ * Mazda Connected Services Regional Endpoints as referenced in:
+ * - https://github.com/cv/mcs
+ * - https://github.com/cv/mcs/blob/main/internal/api/auth.go
+ * - https://github.com/cv/mcs/blob/main/internal/api/b2c.go
  */
 enum class MazdaRegionalCluster(
     val code: String,
@@ -51,9 +47,9 @@ enum class MazdaRegionalCluster(
     ),
     CV_MCS_BRIDGE(
         code = "BRIDGE",
-        regionTitle = "cv/mcs Local Daemon / Proxy",
+        regionTitle = "cv/mcs Gateway Adapter",
         primaryBaseUrl = "http://10.0.2.2:8080/api/",
-        description = "Self-hosted Go cv/mcs or Home Assistant local proxy"
+        description = "Local or networked cv/mcs Go daemon / proxy"
     );
 
     companion object {
@@ -63,55 +59,7 @@ enum class MazdaRegionalCluster(
     }
 }
 
-/**
- * Authentication and encryption helper matching the Mazda mobile app & pymazda protocol.
- * Passwords are encrypted client-side using an RSA Public Key retrieved dynamically from Mazda's auth server.
- */
-object MazdaSecurityCrypto {
-    fun encryptPasswordWithPublicKey(password: String, rawPublicKeyPem: String): String {
-        val sanitized = rawPublicKeyPem
-            .replace("-----BEGIN PUBLIC KEY-----", "")
-            .replace("-----END PUBLIC KEY-----", "")
-            .replace("\\s".toRegex(), "")
-            .trim()
-
-        val decodedKey = Base64.decode(sanitized, Base64.DEFAULT)
-        val keySpec = X509EncodedKeySpec(decodedKey)
-        val keyFactory = KeyFactory.getInstance("RSA")
-        val publicKey = keyFactory.generatePublic(keySpec)
-
-        val cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding")
-        cipher.init(Cipher.ENCRYPT_MODE, publicKey)
-        val encryptedBytes = cipher.doFinal(password.toByteArray(Charsets.UTF_8))
-        return Base64.encodeToString(encryptedBytes, Base64.NO_WRAP)
-    }
-}
-
 // ----------------- Data Transfer Objects (DTOs) -----------------
-
-data class PublicKeyResponse(
-    @Json(name = "publicKey") val publicKey: String = "",
-    @Json(name = "keyTimestamp") val keyTimestamp: Long = System.currentTimeMillis()
-)
-
-data class MazdaLoginRequest(
-    @Json(name = "email") val email: String,
-    @Json(name = "encryptedPassword") val encryptedPassword: String,
-    @Json(name = "keyTimestamp") val keyTimestamp: Long = System.currentTimeMillis(),
-    @Json(name = "region") val region: String = "MNAO",
-    @Json(name = "deviceId") val deviceId: String = "android_nowmymazda_app"
-)
-
-data class MazdaLoginResponse(
-    @Json(name = "accessToken") val accessToken: String? = null,
-    @Json(name = "refreshToken") val refreshToken: String? = null,
-    @Json(name = "userId") val userId: String? = null,
-    @Json(name = "expiresIn") val expiresInSeconds: Long? = null,
-    @Json(name = "customerName") val customerName: String? = null,
-    @Json(name = "region") val region: String? = null,
-    @Json(name = "error") val error: String? = null,
-    @Json(name = "error_description") val errorDescription: String? = null
-)
 
 data class MazdaVehicleItem(
     @Json(name = "vin") val vin: String,
@@ -146,6 +94,13 @@ data class RemoteControlResponse(
     @Json(name = "message") val message: String? = null
 )
 
+data class CommandStatusResponse(
+    @Json(name = "command_id") val commandId: String,
+    @Json(name = "status") val status: String,
+    @Json(name = "completed") val completed: Boolean = false,
+    @Json(name = "error_message") val errorMessage: String? = null
+)
+
 data class CloudTelematicsDto(
     @Json(name = "vin") val vin: String,
     @Json(name = "engine_status") val engineStatus: String? = null,
@@ -161,7 +116,7 @@ data class CloudTelematicsDto(
     @Json(name = "latitude") val latitude: Double? = null,
     @Json(name = "longitude") val longitude: Double? = null,
     @Json(name = "odometer_miles") val odometerMiles: Int? = null,
-    @Json(name = "active_dtc_codes") val dtcCodes: List<String> = emptyList(),
+    @Json(name = "active_dtc_codes") val dtcCodes: List<String>? = null,
     @Json(name = "timestamp") val timestamp: Long? = null
 )
 
@@ -169,17 +124,7 @@ data class CloudTelematicsDto(
 
 interface ConnectedVehicleApiService {
 
-    // --- Authentication Endpoints (cv/mcs & pymazda protocol) ---
-
-    @GET("api/v1/auth/publicKey")
-    suspend fun getPublicKey(): Response<PublicKeyResponse>
-
-    @POST("api/v1/auth/login")
-    suspend fun login(
-        @Body request: MazdaLoginRequest
-    ): Response<MazdaLoginResponse>
-
-    // --- Vehicle Discovery & Status Endpoints ---
+    // --- Vehicle Discovery & Status ---
 
     @GET("api/v1/vehicles")
     suspend fun getVehicles(
@@ -194,81 +139,24 @@ interface ConnectedVehicleApiService {
 
     // --- Remote Control Commands ---
 
-    @POST("api/v1/vehicles/{vin}/remote/engine/start")
-    suspend fun remoteStartEngine(
+    @POST("api/v1/vehicles/{vin}/remote-control")
+    suspend fun dispatchRemoteCommand(
         @Header("Authorization") token: String,
         @Path("vin") vin: String,
-        @Body request: MazdaRemoteCommandRequest
+        @Body request: RemoteControlRequest
     ): Response<RemoteControlResponse>
 
-    @POST("api/v1/vehicles/{vin}/remote/engine/stop")
-    suspend fun remoteStopEngine(
+    @GET("api/v1/vehicles/{vin}/remote-control/status/{commandId}")
+    suspend fun getRemoteCommandStatus(
         @Header("Authorization") token: String,
-        @Path("vin") vin: String
-    ): Response<RemoteControlResponse>
-
-    @POST("api/v1/vehicles/{vin}/remote/doors/lock")
-    suspend fun remoteLockDoors(
-        @Header("Authorization") token: String,
-        @Path("vin") vin: String
-    ): Response<RemoteControlResponse>
-
-    @POST("api/v1/vehicles/{vin}/remote/doors/unlock")
-    suspend fun remoteUnlockDoors(
-        @Header("Authorization") token: String,
-        @Path("vin") vin: String
-    ): Response<RemoteControlResponse>
-
-    @POST("api/v1/vehicles/{vin}/remote/lights/hazard")
-    suspend fun remoteHazardLights(
-        @Header("Authorization") token: String,
-        @Path("vin") vin: String
-    ): Response<RemoteControlResponse>
-
-    @POST("api/v1/vehicles/{vin}/remote/horn/sound")
-    suspend fun remoteHorn(
-        @Header("Authorization") token: String,
-        @Path("vin") vin: String
-    ): Response<RemoteControlResponse>
-
-    @POST("api/v1/vehicles/{vin}/remote/trunk/toggle")
-    suspend fun remoteTrunk(
-        @Header("Authorization") token: String,
-        @Path("vin") vin: String
-    ): Response<RemoteControlResponse>
-
-    // --- Diagnostics & OBD-II DTC Endpoints ---
-
-    @POST("api/v1/vehicles/{vin}/diagnostics/scan")
-    suspend fun runDiagnosticScan(
-        @Header("Authorization") token: String,
-        @Path("vin") vin: String
-    ): Response<RemoteControlResponse>
-
-    @POST("api/v1/vehicles/{vin}/diagnostics/clear")
-    suspend fun clearDtcCodes(
-        @Header("Authorization") token: String,
-        @Path("vin") vin: String
-    ): Response<RemoteControlResponse>
+        @Path("vin") vin: String,
+        @Path("commandId") commandId: String
+    ): Response<CommandStatusResponse>
 
     @GET("api/v1/health")
     suspend fun pingGateway(
         @Header("Authorization") token: String
     ): Response<RemoteControlResponse>
-
-    // --- Legacy / cv/mcs Bridge Direct Route Compatibility ---
-
-    @POST("control/execute")
-    suspend fun executeControlCommand(
-        @Header("Authorization") token: String,
-        @Body request: RemoteControlRequest
-    ): Response<RemoteControlResponse>
-
-    @GET("status/{vin}")
-    suspend fun getVehicleTelematics(
-        @Header("Authorization") token: String,
-        @Path("vin") vin: String
-    ): Response<CloudTelematicsDto>
 }
 
 // ----------------- Retrofit Client Builder -----------------
@@ -278,7 +166,6 @@ object ApiClient {
         .add(KotlinJsonAdapterFactory())
         .build()
 
-    // Redact Authorization headers to prevent token leakage in Logcat
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)

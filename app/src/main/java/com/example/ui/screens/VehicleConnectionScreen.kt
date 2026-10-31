@@ -302,7 +302,7 @@ fun VehicleConnectionScreen(
                         color = colors.textPrimary
                     )
                     Text(
-                        text = "Your password is encrypted client-side using dynamic RSA-2048 public key before transmission.",
+                        text = "Authenticates using Mazda Azure AD B2C with PKCE token rotation matching cv/mcs, or connects via a self-hosted cv/mcs Gateway Adapter.",
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.textSecondary,
                         modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)

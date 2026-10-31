@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.data.model.CloudApiConfig
 import com.example.ui.theme.AppTheme
@@ -36,13 +36,13 @@ import com.example.ui.theme.SoulRedPrimary
 @Composable
 fun CloudApiConfigDialog(
     config: CloudApiConfig,
-    onSave: (String, String) -> Unit,
+    onSave: (String, Boolean) -> Unit,
     onTestPing: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val colors = AppTheme.colors
     var apiUrl by remember { mutableStateOf(config.apiUrl) }
-    var apiToken by remember { mutableStateOf(config.apiToken) }
+    var isGateway by remember { mutableStateOf(config.isGatewayAdapter) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -63,7 +63,7 @@ fun CloudApiConfigDialog(
                 )
 
                 Text(
-                    text = "Secure telematics REST API gateway for remote commands, telemetry polling, and DTC diagnostic alerts.",
+                    text = "Connect directly to Mazda Connected Services regional clusters or via a cv/mcs Gateway Adapter.",
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.textSecondary,
                     modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
@@ -72,7 +72,7 @@ fun CloudApiConfigDialog(
                 OutlinedTextField(
                     value = apiUrl,
                     onValueChange = { apiUrl = it },
-                    label = { Text("API Gateway URL") },
+                    label = { Text("API Host / Gateway URL") },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = SoulRedPrimary,
                         unfocusedBorderColor = colors.border,
@@ -84,50 +84,52 @@ fun CloudApiConfigDialog(
                         .testTag("api_url_input")
                 )
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     androidx.compose.material3.OutlinedButton(
-                        onClick = { apiUrl = "https://connected-api.mazda.cloud/v2/telematics" },
+                        onClick = {
+                            apiUrl = "https://app-api.mazdausa.com/"
+                            isGateway = false
+                        },
                         modifier = Modifier.weight(1f)
                     ) {
                         Text("Mazda MNAO", fontSize = 11.sp, color = colors.textPrimary)
                     }
                     androidx.compose.material3.OutlinedButton(
-                        onClick = { apiUrl = "http://10.0.2.2:8080/v2/telematics" },
+                        onClick = {
+                            apiUrl = "http://10.0.2.2:8080/api/"
+                            isGateway = true
+                        },
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("cv/mcs Bridge", fontSize = 11.sp, color = colors.textPrimary)
+                        Text("cv/mcs Gateway", fontSize = 11.sp, color = colors.textPrimary)
                     }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                OutlinedTextField(
-                    value = apiToken,
-                    onValueChange = { apiToken = it },
-                    label = { Text("Secure Telematics Bearer Token") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = SoulRedPrimary,
-                        unfocusedBorderColor = colors.border,
-                        focusedTextColor = colors.textPrimary,
-                        unfocusedTextColor = colors.textPrimary
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("api_token_input")
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Text(
-                    text = "VIN: ${config.vin}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.textSecondary
-                )
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = colors.surfaceElevated,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text(
+                            text = "Session: ${config.sessionStateSummary}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (config.hasValidSession) DiagnosticGreen else colors.textSecondary
+                        )
+                        Text(
+                            text = "VIN: ${config.vin.ifBlank { "None Selected" }}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colors.textSecondary
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -141,7 +143,7 @@ fun CloudApiConfigDialog(
                     if (config.isSyncing) {
                         CircularProgressIndicator(color = colors.textPrimary, strokeWidth = 2.dp)
                     } else {
-                        Text("Test Live Gateway Ping & Sync", color = colors.textPrimary)
+                        Text("Test Live Handshake Ping", color = colors.textPrimary)
                     }
                 }
 
@@ -149,7 +151,7 @@ fun CloudApiConfigDialog(
 
                 Button(
                     onClick = {
-                        onSave(apiUrl, apiToken)
+                        onSave(apiUrl, isGateway)
                         onDismiss()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = SoulRedPrimary),
@@ -157,7 +159,7 @@ fun CloudApiConfigDialog(
                         .fillMaxWidth()
                         .testTag("save_cloud_api_button")
                 ) {
-                    Text("Save API Credentials")
+                    Text("Save Connection Settings")
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))

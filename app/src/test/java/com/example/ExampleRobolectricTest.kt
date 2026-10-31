@@ -30,7 +30,7 @@ class ExampleRobolectricTest {
   fun `verify vehicle initial state parameters`() {
     val state = VehicleState()
     assertEquals(LockState.UNKNOWN, state.lockState)
-    assertEquals(EngineState.OFF, state.engineState)
+    assertEquals(EngineState.UNKNOWN, state.engineState)
     assertEquals(false, state.isConnected)
     assertEquals(false, state.isVehicleSelected)
     assertEquals(false, state.batteryHealth.isAvailable)
@@ -183,34 +183,53 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `verify MazdaSecurityCrypto RSA password encryption with real keypair`() {
-    // Generate valid RSA 2048-bit keypair
-    val keyPairGenerator = java.security.KeyPairGenerator.getInstance("RSA")
-    keyPairGenerator.initialize(2048)
-    val keyPair = keyPairGenerator.genKeyPair()
-    val rawPubKeyBase64 = android.util.Base64.encodeToString(keyPair.public.encoded, android.util.Base64.NO_WRAP)
-    val pemPublicKey = "-----BEGIN PUBLIC KEY-----\n$rawPubKeyBase64\n-----END PUBLIC KEY-----"
+  fun `verify MazdaB2cAuthEngine settings match cv_mcs b2c specifications`() {
+    val mnaoEngine = com.example.data.remote.MazdaB2cAuthEngine(com.example.data.remote.MazdaRegionalCluster.MNAO)
+    val mnaoConfig = mnaoEngine.b2cSettings()
+    assertEquals("mazdaapp", mnaoConfig.tenantName)
+    assertEquals("B2C_1A_signup_signin", mnaoConfig.policy)
+    assertEquals("09b68673-982c-47b2-8418-5a415ff5e08b", mnaoConfig.clientId)
+    assertTrue(mnaoConfig.authorizeUrl.contains("oauth2/v2.0/authorize"))
+    assertTrue(mnaoConfig.tokenUrl.contains("oauth2/v2.0/token"))
 
-    val secretPassword = "ZoomZoomMazda2025!"
-    val encrypted = com.example.data.remote.MazdaSecurityCrypto.encryptPasswordWithPublicKey(secretPassword, pemPublicKey)
+    val mmeEngine = com.example.data.remote.MazdaB2cAuthEngine(com.example.data.remote.MazdaRegionalCluster.MME)
+    val mmeConfig = mmeEngine.b2cSettings()
+    assertEquals("mazdaeu", mmeConfig.tenantName)
+    assertEquals("B2C_1A_signup_signin_eu", mmeConfig.policy)
+    assertEquals("a4176d65-749e-4b28-b996-3c7dc57b4435", mmeConfig.clientId)
 
-    assertTrue("Encrypted password must not be empty", encrypted.isNotEmpty())
-    assertTrue("Encrypted output should not be equal to plain password", encrypted != secretPassword)
-
-    // Decrypt with private key to prove RSA ECB PKCS1Padding round-trip
-    val cipher = javax.crypto.Cipher.getInstance("RSA/ECB/PKCS1Padding")
-    cipher.init(javax.crypto.Cipher.DECRYPT_MODE, keyPair.private)
-    val decryptedBytes = cipher.doFinal(android.util.Base64.decode(encrypted, android.util.Base64.DEFAULT))
-    val decryptedPassword = String(decryptedBytes, Charsets.UTF_8)
-
-    assertEquals("Decrypted password must match original secret", secretPassword, decryptedPassword)
+    val bridgeEngine = com.example.data.remote.MazdaB2cAuthEngine(com.example.data.remote.MazdaRegionalCluster.CV_MCS_BRIDGE)
+    val bridgeConfig = bridgeEngine.b2cSettings()
+    assertEquals("cv_mcs_gateway", bridgeConfig.tenantName)
   }
 
-  @Test(expected = Exception::class)
-  fun `verify MazdaSecurityCrypto fails securely on malformed public key`() {
-    val plainPassword = "MyTestPassword"
-    // Does not fall back to plain base64; fails securely with exception
-    com.example.data.remote.MazdaSecurityCrypto.encryptPasswordWithPublicKey(plainPassword, "NOT_A_VALID_KEY")
+  @Test
+  fun `verify MazdaSessionManager token lifecycle and expiry tracking`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val storage = com.example.data.storage.SecureTokenStorage(context)
+    val sessionManager = com.example.data.storage.MazdaSessionManager(storage)
+
+    val testToken = "real_jwt_access_token_sample"
+    val testRefresh = "real_jwt_refresh_token_sample"
+    // 3600 seconds real expiration
+    sessionManager.saveAuthenticatedSession(
+      accessToken = testToken,
+      refreshToken = testRefresh,
+      idToken = "id_sample",
+      expiresInSeconds = 3600L,
+      customerId = "driver@mazda.com",
+      region = "MNAO"
+    )
+
+    assertTrue("Session must be valid after saving with 3600s expiry", sessionManager.hasValidSession())
+    val stored = sessionManager.getStoredSession()
+    assertEquals(testToken, stored?.accessToken)
+    assertEquals(testRefresh, stored?.refreshToken)
+    assertEquals("driver@mazda.com", stored?.customerId)
+
+    sessionManager.signOut()
+    assertEquals(false, sessionManager.hasValidSession())
+    assertEquals(null, sessionManager.getStoredSession())
   }
 
   @Test

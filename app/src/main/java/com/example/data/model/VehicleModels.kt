@@ -4,7 +4,8 @@ enum class EngineState {
     OFF,
     STARTING,
     RUNNING,
-    STOPPING
+    STOPPING,
+    UNKNOWN
 }
 
 enum class LockState {
@@ -18,6 +19,12 @@ enum class PressureStatus {
     LOW,
     CRITICAL,
     UNKNOWN
+}
+
+enum class LocationSource {
+    VEHICLE_TCU,
+    MOBILE_DEVICE,
+    UNAVAILABLE
 }
 
 data class TireInfo(
@@ -73,7 +80,8 @@ data class VehicleGpsLocation(
     val longitude: Double = 0.0,
     val address: String = "Location Unavailable",
     val lastUpdatedTimestamp: Long? = null,
-    val isParked: Boolean = true
+    val isParked: Boolean = true,
+    val source: LocationSource = LocationSource.UNAVAILABLE
 )
 
 data class GeofenceSettings(
@@ -103,7 +111,9 @@ data class CloudApiConfig(
     val isConnected: Boolean = false,
     val apiUrl: String = "https://app-api.mazdausa.com/",
     val vin: String = "",
-    val apiToken: String = "",
+    val hasValidSession: Boolean = false,
+    val sessionExpiryTimestamp: Long = 0L,
+    val sessionStateSummary: String = "Not Authenticated",
     val lastSyncTimestamp: Long = 0L,
     val cellularSignalBars: Int = 0,
     val isSyncing: Boolean = false,
@@ -111,7 +121,8 @@ data class CloudApiConfig(
     val lastLatencyMs: Long = 0L,
     val lastErrorMessage: String? = null,
     val lastExecutedCommand: String? = null,
-    val regionEndpoint: String = "North America (MNAO)"
+    val regionEndpoint: String = "North America (MNAO)",
+    val isGatewayAdapter: Boolean = false
 )
 
 data class ActiveDriveSession(
@@ -162,9 +173,9 @@ data class MyMazdaAccount(
 sealed class CommandExecutionState {
     object Idle : CommandExecutionState()
     data class Pending(val action: String, val message: String = "Sending request to Mazda Connected Services...") : CommandExecutionState()
-    data class Accepted(val action: String, val message: String = "Command accepted by Mazda cloud. Awaiting TCU execution...") : CommandExecutionState()
-    data class Confirmed(val action: String, val message: String) : CommandExecutionState()
-    data class Failed(val action: String, val errorMessage: String) : CommandExecutionState()
+    data class Accepted(val action: String, val message: String = "Command accepted by Mazda cloud. Awaiting TCU execution...", val commandId: String? = null) : CommandExecutionState()
+    data class Confirmed(val action: String, val message: String, val commandId: String? = null) : CommandExecutionState()
+    data class Failed(val action: String, val errorMessage: String, val errorCode: String? = null) : CommandExecutionState()
 }
 
 data class VehicleState(
@@ -174,7 +185,7 @@ data class VehicleState(
     val nickname: String = "Not Connected",
     val isConnected: Boolean = false,
     val isVehicleSelected: Boolean = false,
-    val engineState: EngineState = EngineState.OFF,
+    val engineState: EngineState = EngineState.UNKNOWN,
     val lockState: LockState = LockState.UNKNOWN,
     val hazardLightsActive: Boolean = false,
     val hornActive: Boolean = false,
