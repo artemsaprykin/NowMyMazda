@@ -9,21 +9,27 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.data.model.UnitSystem
+import com.example.data.remote.ConnectionMode
 import com.example.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.security.MessageDigest
-import java.security.SecureRandom
 import java.util.UUID
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "nowmymazda_settings")
 
 data class PersistedSettings(
     val themeMode: ThemeMode = ThemeMode.DARK,
+    val unitSystem: UnitSystem = UnitSystem.IMPERIAL,
+    val connectionMode: ConnectionMode = ConnectionMode.DIRECT_MAZDA,
     val requireBiometricForRemoteStart: Boolean = true,
     val requireBiometricForDoorUnlock: Boolean = true,
     val requireBiometricForTheftAlarm: Boolean = true,
     val requireBiometricForAppLaunch: Boolean = false,
+    val notifyLowFuel: Boolean = true,
+    val notifyUnlockedDoor: Boolean = true,
+    val notifyGeofenceBreach: Boolean = true,
     val hasCustomPin: Boolean = false,
     val accountEmail: String = "",
     val accountRegionCode: String = "MNAO",
@@ -32,6 +38,8 @@ data class PersistedSettings(
     val selectedNickname: String = "",
     val remoteStartDurationMinutes: Int = 15,
     val remoteStartTargetTempF: Int = 72,
+    val remoteStartHeatedSeats: Boolean = false,
+    val remoteStartRearDefrost: Boolean = false,
     val geofenceEnabled: Boolean = false,
     val geofenceRadiusMeters: Int = 300,
     val geofenceSafeZoneName: String = "Safe Zone",
@@ -43,10 +51,18 @@ class AppPreferencesManager(private val context: Context) {
 
     companion object {
         private val KEY_THEME = stringPreferencesKey("app_theme")
+        private val KEY_UNIT_SYSTEM = stringPreferencesKey("unit_system")
+        private val KEY_CONNECTION_MODE = stringPreferencesKey("connection_mode")
+
         private val KEY_BIO_REMOTE_START = booleanPreferencesKey("bio_remote_start")
         private val KEY_BIO_DOOR_UNLOCK = booleanPreferencesKey("bio_door_unlock")
         private val KEY_BIO_THEFT_ALARM = booleanPreferencesKey("bio_theft_alarm")
         private val KEY_BIO_APP_LAUNCH = booleanPreferencesKey("bio_app_launch")
+
+        private val KEY_NOTIFY_LOW_FUEL = booleanPreferencesKey("notify_low_fuel")
+        private val KEY_NOTIFY_UNLOCKED = booleanPreferencesKey("notify_unlocked")
+        private val KEY_NOTIFY_GEOFENCE = booleanPreferencesKey("notify_geofence")
+
         private val KEY_PIN_HASH = stringPreferencesKey("user_pin_hash")
         private val KEY_PIN_SALT = stringPreferencesKey("user_pin_salt")
 
@@ -58,6 +74,8 @@ class AppPreferencesManager(private val context: Context) {
 
         private val KEY_REMOTE_START_DURATION = intPreferencesKey("remote_start_duration")
         private val KEY_REMOTE_START_TEMP = intPreferencesKey("remote_start_temp")
+        private val KEY_REMOTE_START_HEATED_SEATS = booleanPreferencesKey("remote_start_heated_seats")
+        private val KEY_REMOTE_START_REAR_DEFROST = booleanPreferencesKey("remote_start_rear_defrost")
 
         private val KEY_GEOFENCE_ENABLED = booleanPreferencesKey("geofence_enabled")
         private val KEY_GEOFENCE_RADIUS = intPreferencesKey("geofence_radius")
@@ -74,12 +92,31 @@ class AppPreferencesManager(private val context: Context) {
             ThemeMode.DARK
         }
 
+        val unitStr = prefs[KEY_UNIT_SYSTEM] ?: UnitSystem.IMPERIAL.name
+        val units = try {
+            UnitSystem.valueOf(unitStr)
+        } catch (_: Exception) {
+            UnitSystem.IMPERIAL
+        }
+
+        val connModeStr = prefs[KEY_CONNECTION_MODE] ?: ConnectionMode.DIRECT_MAZDA.name
+        val connMode = try {
+            ConnectionMode.valueOf(connModeStr)
+        } catch (_: Exception) {
+            ConnectionMode.DIRECT_MAZDA
+        }
+
         PersistedSettings(
             themeMode = theme,
+            unitSystem = units,
+            connectionMode = connMode,
             requireBiometricForRemoteStart = prefs[KEY_BIO_REMOTE_START] ?: true,
             requireBiometricForDoorUnlock = prefs[KEY_BIO_DOOR_UNLOCK] ?: true,
             requireBiometricForTheftAlarm = prefs[KEY_BIO_THEFT_ALARM] ?: true,
             requireBiometricForAppLaunch = prefs[KEY_BIO_APP_LAUNCH] ?: false,
+            notifyLowFuel = prefs[KEY_NOTIFY_LOW_FUEL] ?: true,
+            notifyUnlockedDoor = prefs[KEY_NOTIFY_UNLOCKED] ?: true,
+            notifyGeofenceBreach = prefs[KEY_NOTIFY_GEOFENCE] ?: true,
             hasCustomPin = !prefs[KEY_PIN_HASH].isNullOrBlank(),
             accountEmail = prefs[KEY_ACCOUNT_EMAIL] ?: "",
             accountRegionCode = prefs[KEY_ACCOUNT_REGION] ?: "MNAO",
@@ -88,6 +125,8 @@ class AppPreferencesManager(private val context: Context) {
             selectedNickname = prefs[KEY_SELECTED_NICKNAME] ?: "",
             remoteStartDurationMinutes = prefs[KEY_REMOTE_START_DURATION] ?: 15,
             remoteStartTargetTempF = prefs[KEY_REMOTE_START_TEMP] ?: 72,
+            remoteStartHeatedSeats = prefs[KEY_REMOTE_START_HEATED_SEATS] ?: false,
+            remoteStartRearDefrost = prefs[KEY_REMOTE_START_REAR_DEFROST] ?: false,
             geofenceEnabled = prefs[KEY_GEOFENCE_ENABLED] ?: false,
             geofenceRadiusMeters = prefs[KEY_GEOFENCE_RADIUS] ?: 300,
             geofenceSafeZoneName = prefs[KEY_GEOFENCE_NAME] ?: "Safe Zone",
@@ -102,6 +141,18 @@ class AppPreferencesManager(private val context: Context) {
         }
     }
 
+    suspend fun setUnitSystem(units: UnitSystem) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_UNIT_SYSTEM] = units.name
+        }
+    }
+
+    suspend fun setConnectionMode(mode: ConnectionMode) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_CONNECTION_MODE] = mode.name
+        }
+    }
+
     suspend fun setBiometricPreferences(
         forRemoteStart: Boolean,
         forDoorUnlock: Boolean,
@@ -113,6 +164,18 @@ class AppPreferencesManager(private val context: Context) {
             prefs[KEY_BIO_DOOR_UNLOCK] = forDoorUnlock
             prefs[KEY_BIO_THEFT_ALARM] = forTheftAlarm
             prefs[KEY_BIO_APP_LAUNCH] = forAppLaunch
+        }
+    }
+
+    suspend fun setNotificationPreferences(
+        lowFuel: Boolean,
+        unlockedDoor: Boolean,
+        geofenceBreach: Boolean
+    ) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_NOTIFY_LOW_FUEL] = lowFuel
+            prefs[KEY_NOTIFY_UNLOCKED] = unlockedDoor
+            prefs[KEY_NOTIFY_GEOFENCE] = geofenceBreach
         }
     }
 
@@ -131,7 +194,6 @@ class AppPreferencesManager(private val context: Context) {
             val hash = prefs[KEY_PIN_HASH]
             val salt = prefs[KEY_PIN_SALT]
             if (hash.isNullOrBlank() || salt.isNullOrBlank()) {
-                // If no PIN is set yet, any 4-digit PIN is not pre-validated (requires setting one)
                 isValid = false
             } else {
                 val candidateHash = hashPin(candidatePin, salt)
@@ -152,11 +214,13 @@ class AppPreferencesManager(private val context: Context) {
     suspend fun saveAccountSettings(
         email: String,
         regionCode: String,
-        customBridgeUrl: String? = null
+        customBridgeUrl: String? = null,
+        connectionMode: ConnectionMode = ConnectionMode.DIRECT_MAZDA
     ) {
         context.dataStore.edit { prefs ->
             prefs[KEY_ACCOUNT_EMAIL] = email
             prefs[KEY_ACCOUNT_REGION] = regionCode
+            prefs[KEY_CONNECTION_MODE] = connectionMode.name
             if (customBridgeUrl != null) {
                 prefs[KEY_CUSTOM_BRIDGE_URL] = customBridgeUrl
             }
@@ -170,10 +234,17 @@ class AppPreferencesManager(private val context: Context) {
         }
     }
 
-    suspend fun saveRemoteStartPreferences(durationMinutes: Int, targetTempF: Int) {
+    suspend fun saveRemoteStartPreferences(
+        durationMinutes: Int,
+        targetTempF: Int,
+        heatedSeats: Boolean = false,
+        rearDefrost: Boolean = false
+    ) {
         context.dataStore.edit { prefs ->
             prefs[KEY_REMOTE_START_DURATION] = durationMinutes
             prefs[KEY_REMOTE_START_TEMP] = targetTempF
+            prefs[KEY_REMOTE_START_HEATED_SEATS] = heatedSeats
+            prefs[KEY_REMOTE_START_REAR_DEFROST] = rearDefrost
         }
     }
 
@@ -193,9 +264,15 @@ class AppPreferencesManager(private val context: Context) {
         }
     }
 
+    /**
+     * Sign-out behavior (Phase 9):
+     * Completely cleans account-specific configuration, credentials, custom gateway URLs,
+     * and vehicle selection, while preserving user preferences (theme, units, security pin, Room trips).
+     */
     suspend fun clearAccountAndVehicle() {
         context.dataStore.edit { prefs ->
             prefs.remove(KEY_ACCOUNT_EMAIL)
+            prefs.remove(KEY_CUSTOM_BRIDGE_URL)
             prefs.remove(KEY_SELECTED_VIN)
             prefs.remove(KEY_SELECTED_NICKNAME)
         }

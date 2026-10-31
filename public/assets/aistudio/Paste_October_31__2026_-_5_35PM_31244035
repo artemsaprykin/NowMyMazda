@@ -1,0 +1,822 @@
+# NOWMYMAZDA — COMPLETE REPAIR OF MAZDA CONNECTED SERVICES INTEGRATION
+
+## ROLE
+
+You are a senior Android/Kotlin engineer with expertise in OAuth 2.0, Android security, REST APIs, vehicle telematics, Jetpack Compose, DataStore, Room, and reverse-engineered API compatibility.
+
+You are working on my existing Android application:
+
+https://github.com/artemsaprykin/NowMyMazda
+
+**YOUR TASK IS TO FIX THE APPLICATION SOURCE CODE, NOT CREATE ANOTHER PROTOTYPE OR WRITE AN IMPLEMENTATION PROPOSAL.**
+
+Several previous attempts failed because you implemented simulated connections, fabricated data, nonexistent API domains, unverified authentication flows, and incorrect vehicle-command handling.
+
+I have now independently analyzed network activity from the **official MyMazda Android application**, tested real Mazda domain resolution, and compared your implementation with the `cv/mcs` repository.
+
+Use this evidence and the current reference implementations to fix the application properly.
+
+Preserve the existing UI wherever practical. Focus on functionality, security, persistence, and correctness.
+
+---
+
+# PHASE 1 — USE THE VERIFIED MAZDA NETWORK INFORMATION
+
+## 1.1 Actual domains observed
+
+I captured traffic from the official MyMazda Android application using PCAPdroid, Pi-hole, and Wireshark.
+
+Official application package:
+
+`com.interrait.mymazda`
+
+The following domains were observed:
+
+### North American authentication
+
+`na.id.mazda.com`
+
+This domain was contacted during official application startup. It is consistent with the North American Mazda identity service.
+
+The official application also queried:
+
+`login.microsoftonline.com`
+
+Determine the relationship between these identity services using current reference code.
+
+### North American Mazda Connected Services
+
+`0cxo7m58.mazda.com`
+
+This domain was contacted during:
+
+- Application startup
+- Vehicle-status refresh
+- Vehicle-location viewing
+
+It also matches the North American vehicle-service address documented in `cv/mcs`.
+
+Documented base URL:
+
+`https://0cxo7m58.mazda.com/prod/`
+
+### Additional Mazda backend
+
+`hgs2ivna.mazda.com`
+
+This domain was repeatedly contacted during:
+
+- Application startup
+- Vehicle-status refresh
+- Vehicle-location viewing
+
+It carried significant HTTPS traffic in all three captures.
+
+**Important:** Its exact API responsibilities are not yet known.
+
+Investigate this domain through reference code and independently verifiable evidence. Do not assume it handles a particular operation simply because it received more traffic.
+
+### Connectivity verification
+
+All three Mazda domains above:
+
+- Resolved successfully through public DNS.
+- Accepted TCP connections on port 443.
+
+An unauthenticated request to `https://0cxo7m58.mazda.com/prod/` established a connection and sent an HTTP request but timed out without an HTTP response.
+
+This is not proof that Mazda's API is unavailable. The service may require a specific authenticated request format.
+
+Do not use an unauthenticated GET or HEAD request to `/prod/` as proof that a properly authenticated API is functioning.
+
+## 1.2 Remove invented production hosts
+
+Immediately remove the existing production dependency on:
+
+- `app-api.mazdausa.com`
+- `eu.mzda.net`
+- `jp.mzda.net`
+
+The North American hostname `app-api.mazdausa.com` returned DNS NXDOMAIN when tested against Pi-hole, Cloudflare DNS, and Google DNS.
+
+These are not acceptable production defaults.
+
+## 1.3 Other documented regional hosts
+
+The published `cv/mcs` v0.7.12 package identifies:
+
+- MNAO: `https://0cxo7m58.mazda.com/prod/`
+- MME: `https://e9stj7g7.mazda.com/prod/`
+- MJO: `https://wcs9p6wj.mazda.com/prod/`
+
+All three hostnames successfully resolved through Cloudflare and Google DNS during my testing.
+
+However, I have only collected official application traffic for North America.
+
+**Implement and validate MNAO first.**
+
+Keep Europe and Japan explicitly unverified until their current authentication and vehicle protocols have been independently confirmed.
+
+Do not confuse valid DNS resolution with proven API functionality.
+
+---
+
+# PHASE 2 — STUDY THE CURRENT CV/MCS SOURCE CODE
+
+Primary reference:
+
+https://github.com/cv/mcs
+
+Critical authentication references:
+
+https://github.com/cv/mcs/blob/main/internal/api/auth.go
+
+https://github.com/cv/mcs/blob/main/internal/api/b2c.go
+
+Additional references:
+
+https://github.com/fano0001/home-assistant-mazda
+
+https://github.com/tkarle/home-assistant-mazda
+
+The `cv/mcs` project is the primary technical reference because it currently documents:
+
+- MyMazda 9.5 authentication
+- Azure AD B2C authentication
+- Cached session management
+- Token refresh
+- Mazda Connected Services API communication
+- Request signing and encryption
+- Real vehicle discovery and status
+- Remote-command handling
+- Report timestamps
+
+Review the **current source files and their called functions**, not just repository README files.
+
+Pin the exact commit or release reviewed.
+
+Trace the relevant authentication, request construction, session attachment, vehicle discovery, status retrieval, and response-processing code.
+
+Do not copy outdated Usher/RSA authentication into the application if the current regional implementation requires B2C.
+
+Do not assume that cv/mcs exposes a REST gateway. Its documented interfaces include CLI and MQTT.
+
+Verify compatibility and licensing before incorporating reference code.
+
+---
+
+# PHASE 3 — REPLACE THE BROKEN AUTHENTICATION IMPLEMENTATION
+
+Review:
+
+- `MazdaB2cAuthEngine.kt`
+- `MazdaSessionManager.kt`
+- `VehicleRepository.kt`
+- `ConnectedVehicleApi.kt`
+- `AndroidManifest.xml`
+
+## 3.1 Remove unverified Azure AD B2C configuration
+
+The current implementation uses hardcoded identity URLs based on:
+
+`mazdaapp.b2clogin.com`
+
+It also contains unverified tenant names, policies, client IDs, scopes, and redirect URIs.
+
+The official MyMazda application was observed contacting:
+
+`na.id.mazda.com`
+
+Investigate the current identity workflow and identify its actual configuration.
+
+Do not invent replacement B2C URLs.
+
+Do not reuse official MyMazda Android client registration details or redirect URI ownership unless they are legitimately usable by NowMyMazda.
+
+Validate that NowMyMazda can receive the authorization callback with its own application identity and configuration.
+
+Where supported, use a browser-based OAuth authorization-code flow with PKCE.
+
+Do not silently substitute a password-based flow.
+
+If third-party client authorization is unavailable, record this as a real compatibility blocker and implement only the portions that can legitimately function.
+
+Never claim a successful login without a valid authenticated session.
+
+## 3.2 Fix device-session attachment
+
+The current `VehicleRepository.kt` calls:
+
+`b2cEngine.attachSession(tokenData.accessToken, deviceId)`
+
+without validating the returned result.
+
+That is incorrect.
+
+If the protocol requires device-session attachment, it must succeed before the application transitions to an authenticated state.
+
+Remove synthetic values such as:
+
+`ses_${System.currentTimeMillis()}`
+
+Never invent a session identifier when Mazda does not return one.
+
+## 3.3 Fix token management
+
+Implement a genuine token lifecycle:
+
+1. Authenticate through the verified supported flow.
+2. Parse actual token responses.
+3. Store tokens securely.
+4. Track expiration using genuine response metadata.
+5. Refresh tokens when required.
+6. Handle refresh-token rotation.
+7. Preserve required session/device metadata.
+8. Reuse valid sessions.
+9. Prevent repeated automatic login attempts.
+10. Require reauthentication when refresh fails.
+
+Do not use a default 24-hour expiration when Mazda does not provide one.
+
+Do not invent customer identifiers.
+
+Do not automatically sign in again after a failed refresh.
+
+New sign-ins can disrupt the official MyMazda application's session, so minimize unnecessary authentication attempts.
+
+---
+
+# PHASE 4 — IMPLEMENT THE ACTUAL MAZDA API PROTOCOL
+
+The current `ConnectedVehicleApi.kt` incorrectly defines a conventional REST API with paths such as:
+
+`api/v1/vehicles`
+
+`api/v1/vehicles/{vin}/status`
+
+`api/v1/vehicles/{vin}/remote-control`
+
+There is no verified evidence that these endpoints exist on Mazda's actual regional servers.
+
+**Remove unsupported generic production API routes.**
+
+Use the actual current Mazda integration as your reference.
+
+Required work:
+
+- Implement verified regional API routing.
+- Implement the actual request format.
+- Handle required headers.
+- Implement required signing/encryption where supported.
+- Support necessary session identifiers.
+- Decode actual response envelopes.
+- Interpret Mazda-specific result codes.
+- Map responses to strongly typed Kotlin models.
+- Handle network errors without inventing successful results.
+- Preserve real timestamps and vehicle identifiers.
+- Use TLS certificate validation.
+- Do not bypass server authentication or access controls.
+
+Do not assume that sending:
+
+`Authorization: Bearer <token>`
+
+to an arbitrary REST endpoint is equivalent to the current Mazda protocol.
+
+## Connection mode separation
+
+Implement explicit connection modes:
+
+**DIRECT_MAZDA**
+
+Uses the verified Mazda authentication and vehicle-service protocol.
+
+**MCS_GATEWAY**
+
+Uses a separately implemented and authenticated gateway with a documented contract.
+
+A custom URL must not automatically switch the application into gateway mode.
+
+Do not use the same API models and endpoint paths for both connection types unless the actual contracts are demonstrably equivalent.
+
+---
+
+# PHASE 5 — FIX OR REMOVE THE FAKE MCS GATEWAY
+
+Review:
+
+- `McsGatewayAdapter.kt`
+- `VehicleRepository.kt`
+- `CloudApiConfigDialog.kt`
+
+The existing Android project assumes there is a working cv/mcs HTTP server.
+
+The current configuration uses:
+
+`http://10.0.2.2:8080/api/`
+
+It also appends paths such as:
+
+`api/v1/vehicles`
+
+This can produce incorrect URLs containing duplicated `/api/` segments.
+
+The project does not contain a matching implemented HTTP gateway server.
+
+Therefore:
+
+1. Do not claim that the gateway is functional.
+2. Do not treat a successful health check as Mazda authentication.
+3. Do not create fake Mazda sessions for gateway mode.
+4. Remove the hardcoded token `"mcs_gateway_token"`.
+5. Do not send Mazda credentials to an unverified gateway.
+6. Disable gateway functionality until there is an actual authenticated backend.
+
+If you choose to implement a gateway, include the real server implementation, authenticated client access, encrypted transport, a documented contract, and meaningful integration tests.
+
+Otherwise, keep gateway mode unavailable and concentrate on direct Android integration.
+
+---
+
+# PHASE 6 — FIX CONNECTION STATES AND REAL VEHICLE DISCOVERY
+
+Review:
+
+- `VehicleRepository.kt`
+- `VehicleModels.kt`
+- `VehicleViewModel.kt`
+- `VehicleConnectionScreen.kt`
+- `DashboardScreen.kt`
+
+The application must never report that it is connected merely because:
+
+- A token exists locally.
+- DNS resolution succeeds.
+- TCP port 443 is reachable.
+- HTTP 200 was returned.
+- A gateway health endpoint responds.
+- A fake vehicle is present.
+- An API call was attempted.
+
+Use explicit connection states:
+
+- DISCONNECTED
+- AUTHENTICATING
+- AUTHENTICATED
+- VERIFYING_SESSION
+- DISCOVERING_VEHICLES
+- CONNECTED
+- SESSION_EXPIRED
+- CONNECTION_FAILED
+- UNSUPPORTED
+
+The CONNECTED state requires verification of the appropriate Mazda session and successful access to a real account-linked vehicle service.
+
+Retrieve the user's actual vehicles.
+
+The vehicle list must come from real API data.
+
+Do not insert hardcoded Mazda vehicles or VINs.
+
+Support multiple vehicles and persist the active vehicle selection.
+
+If the account has no vehicles, show an empty vehicle list.
+
+If the API request fails, display the actual failure.
+
+Do not substitute example vehicles.
+
+---
+
+# PHASE 7 — IMPLEMENT ACCURATE VEHICLE STATUS
+
+The first functional integration milestone must be **read-only vehicle discovery and status retrieval**.
+
+Prioritize:
+
+- Vehicle model and year
+- VIN
+- Odometer
+- Fuel level
+- Driving range
+- Door status
+- Lock status
+- Window status
+- Engine status, if exposed
+- Vehicle location
+- Tire pressures
+- Battery/charging information, when applicable
+- Vehicle report timestamp
+
+Use verified response fields.
+
+Not all Mazda vehicles or account regions expose the same capabilities.
+
+Implement capability-based behavior.
+
+When an API field is missing, show:
+
+`Unavailable`
+
+or:
+
+`Not supported`
+
+Do not generate values.
+
+Examples of prohibited behavior:
+
+- Assigning a fixed battery-health percentage.
+- Copying one tire-pressure value to other tires.
+- Assuming unknown engine state means OFF.
+- Inventing driving scores.
+- Creating maximum speeds from arbitrary multipliers.
+- Reporting diagnostic health without actual diagnostic evidence.
+- Treating phone GPS coordinates as the car's coordinates.
+
+Distinguish:
+
+- Fresh verified vehicle data
+- Cached verified vehicle data
+- Estimated values, if explicitly supported and clearly labeled
+- Unavailable data
+- Unsupported capabilities
+
+Include the actual last-reported timestamp.
+
+Never label a cached vehicle report as live.
+
+If a status refresh fails, preserve the last verified data as stale, with a visible error.
+
+---
+
+# PHASE 8 — FIX ALL REMOTE COMMANDS
+
+The current application has incorrect command-result handling.
+
+For example, `VehicleRepository.kt` may generate:
+
+`cmd_${System.currentTimeMillis()}`
+
+when the server does not provide a command ID.
+
+Remove this behavior.
+
+The application also reports some operations as physically completed after receiving a successful HTTP response.
+
+This is incorrect.
+
+## Required command lifecycle
+
+Use explicit states:
+
+- IDLE
+- SUBMITTING
+- ACCEPTED
+- PENDING
+- CONFIRMED
+- FAILED
+- TIMED_OUT
+- UNKNOWN_OUTCOME
+- UNSUPPORTED
+
+A command must follow this logical sequence:
+
+User authorization → API request → Actual application-level response → Command accepted/rejected → Verification, if supported → Final outcome.
+
+Requirements:
+
+1. Validate the actual application-level result.
+2. Distinguish command acceptance from physical completion.
+3. Do not fabricate command identifiers.
+4. Never confirm a command using stale vehicle information.
+5. Respect actual command status and report timestamps.
+6. Handle timeouts explicitly.
+7. Do not automatically retry potentially non-idempotent commands.
+8. Prevent accidental duplicate submissions.
+9. Check actual supported vehicle capabilities.
+10. Require appropriate local authorization for sensitive commands.
+
+Do not report horn activation, trunk release, door unlocking, or engine operation as physically completed without reliable confirmation.
+
+If an API does not provide confirmation, show ACCEPTED or UNKNOWN_OUTCOME as appropriate.
+
+**Do not execute real vehicle-affecting commands during automated tests.**
+
+Do not test a real remote command without explicit user authorization.
+
+Keep remote-command functionality disabled until authenticated read-only vehicle communication is verified.
+
+---
+
+# PHASE 9 — FIX SETTINGS PERSISTENCE COMPLETELY
+
+Review:
+
+- `AppPreferencesManager.kt`
+- `SettingsScreen.kt`
+- `VehicleViewModel.kt`
+- `VehicleRepository.kt`
+- `MazdaSessionManager.kt`
+
+The application already uses Jetpack DataStore, but not every editable setting is correctly connected to persistent storage.
+
+Audit every Settings screen control.
+
+Persist:
+
+- Theme: Light, Dark, System
+- Units
+- Notification preferences
+- Biometric preferences
+- Account region and country
+- Selected vehicle
+- Vehicle nickname, if user-editable
+- Remote-start preferences
+- Geofence settings
+- Other user-editable configuration
+
+The current `saveRemoteStartPreferences()` method exists, but must be wired to the actual user controls.
+
+Ensure that stored preferences are loaded correctly when the app starts.
+
+Preserve user changes after:
+
+- Navigation between screens
+- Activity recreation
+- Application force-stop
+- Application relaunch
+- Device restart
+
+Do not use MutableStateFlow as the sole storage mechanism.
+
+## Sign-out behavior
+
+The current application may leave stale gateway configuration after signing out.
+
+Fix sign-out so account-specific configuration and secrets are cleared appropriately.
+
+Do not accidentally delete unrelated user preferences or historical local records.
+
+Preserve existing Room database data.
+
+Use proper versioned migrations rather than destructive migrations.
+
+---
+
+# PHASE 10 — FIX SECURITY
+
+Review:
+
+- `SecureTokenStorage.kt`
+- `MazdaSessionManager.kt`
+- `AppPreferencesManager.kt`
+- `BiometricAuthManager.kt`
+- `AndroidManifest.xml`
+
+Maintain Android Keystore-backed AES-GCM encryption for sensitive sessions.
+
+Do not implement fallback storage using plaintext or merely Base64-encoded tokens.
+
+If encryption fails, fail closed and request reauthentication where necessary.
+
+Additional requirements:
+
+- Never log passwords or authentication tokens.
+- Never log session secrets or authorization codes.
+- Do not expose sensitive credentials in StateFlows consumed by the UI.
+- Exclude sensitive session information from insecure backups.
+- Validate TLS certificates.
+- Do not hardcode passwords or private keys.
+- Do not use a fabricated security PIN.
+- Strengthen PIN handling and enforce rate limits, or use Android system credentials.
+- Require successful biometric/system authorization before sensitive vehicle commands.
+
+Review the application's HTTP logging interceptors to ensure request metadata cannot leak private information.
+
+---
+
+# PHASE 11 — CORRECT LOCATION, TRIPS, AND DIAGNOSTICS
+
+The application currently mixes real and simulated data in several areas.
+
+## Vehicle location
+
+The official MyMazda app was observed communicating with Mazda servers while displaying vehicle location.
+
+Implement vehicle location only from a verified Mazda response.
+
+Never substitute the phone's current GPS location and present it as the vehicle's position.
+
+Keep phone location and vehicle location separate.
+
+## Trip history
+
+Preserve existing local trip records.
+
+Remove automatically generated fake trip data.
+
+Do not invent:
+
+- Driving scores
+- Maximum speeds
+- Fuel-consumption readings
+- Vehicle telemetry
+
+Manual records may remain supported.
+
+Automatic trip recording must identify the actual data source and obtain appropriate permissions.
+
+## Diagnostics
+
+Do not claim cloud-based OBD-II or CAN-bus capabilities that Mazda Connected Services does not expose.
+
+Separate:
+
+- Actual Mazda cloud vehicle-health information
+- Locally entered maintenance records
+- Optional external OBD-II adapter data
+
+If a diagnostic function is unsupported, disable it and explain that limitation.
+
+Do not generate fabricated fault-code results or display fake ECU scan success.
+
+---
+
+# PHASE 12 — AUTOMATED TESTS AND BUILD VALIDATION
+
+Implement tests that detect the exact problems introduced in previous versions.
+
+## Authentication tests
+
+- Invalid credentials never create a connected session.
+- Unverified B2C configuration cannot silently authenticate.
+- Failed session attachment prevents connection.
+- Expired tokens trigger correct refresh handling.
+- Refused refresh requires explicit reauthentication.
+- Missing session IDs are not invented.
+- Gateway health checks do not create Mazda sessions.
+
+## Network configuration tests
+
+- Invalid hostnames produce real connection errors.
+- MNAO uses the source-verified configuration.
+- Service hosts and identity hosts are separated.
+- Gateway URLs cannot contain duplicated `/api/` segments.
+- Custom URLs do not automatically change connection mode.
+- HTTP failures cannot produce fake successful responses.
+
+## Vehicle tests
+
+- No vehicles returned means an empty list.
+- Missing values remain unavailable.
+- Stale reports remain marked stale.
+- Vehicle identification comes from actual API data.
+- Status refresh failure cannot confirm a vehicle state.
+- Vehicle selection persists across restarts.
+
+## Remote-command tests
+
+- HTTP 200 with an application-level failure is rejected.
+- Missing command IDs are not fabricated.
+- Accepted does not mean confirmed.
+- Cached reports cannot confirm commands.
+- Unsupported functions remain disabled.
+- Duplicate submissions are prevented.
+
+Use local test doubles. Never run commands against a real vehicle during automated testing.
+
+## Persistence tests
+
+- Theme persists.
+- Biometric preferences persist.
+- Remote-start preferences persist.
+- Selected vehicle persists.
+- Account configuration is restored appropriately.
+- Sign-out clears account secrets.
+- Existing Room data survives migration.
+
+Run available Gradle compilation and automated tests.
+
+If Android SDK dependencies prevent testing, report the exact blocker.
+
+Do not claim tests passed when they were not executed.
+
+---
+
+# PHASE 13 — REQUIRED IMPLEMENTATION ORDER
+
+Follow this order.
+
+**Milestone 1 — Remove broken integrations**
+
+Remove nonexistent domains, fake tokens, fabricated session IDs, unsupported endpoint paths, and false connection success.
+
+**Milestone 2 — Correct authentication**
+
+Implement the verified North American authentication and session lifecycle.
+
+**Milestone 3 — Connect to Mazda vehicle services**
+
+Implement the actual API transport, authentication requirements, request processing, and response decoding.
+
+**Milestone 4 — Retrieve real vehicle information**
+
+Demonstrate real account-linked vehicle discovery and read-only status retrieval.
+
+**Milestone 5 — Finish persistence and security**
+
+Complete DataStore wiring, Keystore security, account restoration, and sign-out.
+
+**Milestone 6 — Remote commands**
+
+Only enable commands once the preceding milestones are completed and their results can be represented accurately.
+
+**Milestone 7 — Validation**
+
+Build the app, execute automated tests, and document all unsupported or unverified behavior.
+
+Do not jump directly to implementing remote commands or redesigning the dashboard.
+
+---
+
+# REQUIRED FINAL OUTPUT
+
+After modifying the code, provide the following information.
+
+## 1. Files modified
+
+List every modified Kotlin, manifest, build, configuration, and test file.
+
+Describe the actual correction made.
+
+## 2. Verified endpoint mapping
+
+Provide a table containing:
+
+- Function
+- Hostname
+- Actual endpoint or verified protocol operation
+- Corresponding cv/mcs source method and commit
+- Authentication requirement
+- Verification evidence
+- Test result
+
+Do not invent values to fill this table.
+
+If an endpoint is unverified, label it UNVERIFIED.
+
+## 3. Working functionality
+
+Categorize each feature as:
+
+- Implemented and tested locally
+- Implemented but not tested with Mazda
+- Verified against actual Mazda services
+- Unsupported
+- Blocked by external authentication/access restrictions
+
+## 4. Build and test results
+
+Provide actual build results and test results.
+
+Include errors and limitations.
+
+## 5. Remaining issues
+
+List all known defects that remain unresolved.
+
+Do not hide them.
+
+## 6. Security confirmation
+
+Confirm that:
+
+- No fake tokens remain.
+- No fabricated session IDs remain.
+- No unsupported API endpoints are active.
+- No plaintext credential fallback remains.
+- Authentication errors do not create connected states.
+- Failed remote commands do not create successful vehicle states.
+- The app does not display fabricated vehicle information.
+
+---
+
+# FINAL NON-NEGOTIABLE INSTRUCTIONS
+
+1. Modify the actual code in the existing repository.
+2. Do not replace real work with a high-level proposal.
+3. Do not invent Mazda API domains, paths, or responses.
+4. Do not claim that DNS resolution establishes API compatibility.
+5. Do not treat HTTP success as proof of vehicle-command completion.
+6. Do not create a mock integration and present it as production functionality.
+7. Do not assume that the official MyMazda application's client registration can be used by a different Android application.
+8. Do not circumvent authentication protections or TLS security.
+9. Preserve the existing UI and working local functionality.
+10. Prefer a smaller number of genuinely working features over many fake features.
+11. Implement fixes that can be verified; explicitly report external blockers rather than pretending they are resolved.
+12. Do not declare the application fully functional until an authorized Mazda account can successfully retrieve its real vehicle data.
+
+**MOST IMPORTANT PRIORITY: Make real North American Mazda authentication, vehicle discovery, and read-only status retrieval work correctly before implementing anything else.**
+
+Start modifying the existing project now. Complete as much of the implementation and test suite as possible, and report concrete code changes rather than promises.

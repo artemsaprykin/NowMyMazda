@@ -1,5 +1,19 @@
 package com.example.data.model
 
+import com.example.data.remote.ConnectionMode
+
+enum class MazdaConnectionState {
+    DISCONNECTED,
+    AUTHENTICATING,
+    AUTHENTICATED,
+    VERIFYING_SESSION,
+    DISCOVERING_VEHICLES,
+    CONNECTED,
+    SESSION_EXPIRED,
+    CONNECTION_FAILED,
+    UNSUPPORTED
+}
+
 enum class EngineState {
     OFF,
     STARTING,
@@ -25,6 +39,11 @@ enum class LocationSource {
     VEHICLE_TCU,
     MOBILE_DEVICE,
     UNAVAILABLE
+}
+
+enum class UnitSystem {
+    IMPERIAL, // miles, psi, °F
+    METRIC    // km, bar/kPa, °C
 }
 
 data class TireInfo(
@@ -109,11 +128,13 @@ data class DiagnosticStatus(
 
 data class CloudApiConfig(
     val isConnected: Boolean = false,
-    val apiUrl: String = "https://app-api.mazdausa.com/",
+    val connectionState: MazdaConnectionState = MazdaConnectionState.DISCONNECTED,
+    val connectionMode: ConnectionMode = ConnectionMode.DIRECT_MAZDA,
+    val apiUrl: String = "https://0cxo7m58.mazda.com/prod/",
     val vin: String = "",
     val hasValidSession: Boolean = false,
     val sessionExpiryTimestamp: Long = 0L,
-    val sessionStateSummary: String = "Not Authenticated",
+    val sessionStateSummary: String = "Disconnected",
     val lastSyncTimestamp: Long = 0L,
     val cellularSignalBars: Int = 0,
     val isSyncing: Boolean = false,
@@ -154,6 +175,8 @@ data class DiscoveredVehicle(
 data class MyMazdaAccount(
     val email: String = "",
     val isLinked: Boolean = false,
+    val connectionState: MazdaConnectionState = MazdaConnectionState.DISCONNECTED,
+    val connectionMode: ConnectionMode = ConnectionMode.DIRECT_MAZDA,
     val region: String = "North America (MNAO)",
     val regionCode: String = "MNAO",
     val customerId: String = "",
@@ -162,7 +185,6 @@ data class MyMazdaAccount(
     val isTcuPaired: Boolean = false,
     val vehicleVin: String = "",
     val discoveredVehicles: List<DiscoveredVehicle> = emptyList(),
-    // API Permissions verified against backend response
     val dataSharingAgreementGranted: Boolean = false,
     val remoteControlEntitlementActive: Boolean = false,
     val inCarVerificationCompleted: Boolean = false,
@@ -172,10 +194,14 @@ data class MyMazdaAccount(
 
 sealed class CommandExecutionState {
     object Idle : CommandExecutionState()
-    data class Pending(val action: String, val message: String = "Sending request to Mazda Connected Services...") : CommandExecutionState()
+    data class Submitting(val action: String, val message: String = "Authorizing command...") : CommandExecutionState()
     data class Accepted(val action: String, val message: String = "Command accepted by Mazda cloud. Awaiting TCU execution...", val commandId: String? = null) : CommandExecutionState()
+    data class Pending(val action: String, val message: String = "Sending request to Mazda Connected Services...") : CommandExecutionState()
     data class Confirmed(val action: String, val message: String, val commandId: String? = null) : CommandExecutionState()
     data class Failed(val action: String, val errorMessage: String, val errorCode: String? = null) : CommandExecutionState()
+    data class TimedOut(val action: String, val errorMessage: String = "Command timed out waiting for vehicle TCU response.") : CommandExecutionState()
+    data class UnknownOutcome(val action: String, val message: String) : CommandExecutionState()
+    data class Unsupported(val action: String, val reason: String = "Command not supported on this vehicle.") : CommandExecutionState()
 }
 
 data class VehicleState(
@@ -184,7 +210,9 @@ data class VehicleState(
     val year: Int = 0,
     val nickname: String = "Not Connected",
     val isConnected: Boolean = false,
+    val connectionState: MazdaConnectionState = MazdaConnectionState.DISCONNECTED,
     val isVehicleSelected: Boolean = false,
+    val remoteControlEnabled: Boolean = false, // Kept disabled until authenticated read-only vehicle communication is verified
     val engineState: EngineState = EngineState.UNKNOWN,
     val lockState: LockState = LockState.UNKNOWN,
     val hazardLightsActive: Boolean = false,
@@ -206,5 +234,6 @@ data class VehicleState(
     val activeDriveSession: ActiveDriveSession? = null,
     val myMazdaAccount: MyMazdaAccount = MyMazdaAccount(),
     val commandExecutionState: CommandExecutionState = CommandExecutionState.Idle,
-    val themeMode: com.example.ui.theme.ThemeMode = com.example.ui.theme.ThemeMode.DARK
+    val themeMode: com.example.ui.theme.ThemeMode = com.example.ui.theme.ThemeMode.DARK,
+    val unitSystem: UnitSystem = UnitSystem.IMPERIAL
 )

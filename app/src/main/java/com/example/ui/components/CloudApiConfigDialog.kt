@@ -92,7 +92,7 @@ fun CloudApiConfigDialog(
                 ) {
                     androidx.compose.material3.OutlinedButton(
                         onClick = {
-                            apiUrl = "https://app-api.mazdausa.com/"
+                            apiUrl = "https://0cxo7m58.mazda.com/prod/"
                             isGateway = false
                         },
                         modifier = Modifier.weight(1f)
@@ -101,7 +101,7 @@ fun CloudApiConfigDialog(
                     }
                     androidx.compose.material3.OutlinedButton(
                         onClick = {
-                            apiUrl = "http://10.0.2.2:8080/api/"
+                            apiUrl = "http://10.0.2.2:8080/"
                             isGateway = true
                         },
                         modifier = Modifier.weight(1f)

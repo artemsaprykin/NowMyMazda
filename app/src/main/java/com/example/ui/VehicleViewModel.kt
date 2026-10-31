@@ -104,6 +104,9 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
     private val _themeMode = MutableStateFlow(ThemeMode.DARK)
     val themeMode = _themeMode.asStateFlow()
 
+    private val _unitSystem = MutableStateFlow(com.example.data.model.UnitSystem.IMPERIAL)
+    val unitSystem = _unitSystem.asStateFlow()
+
     private val _userGpsLocation = MutableStateFlow<Pair<Double, Double>?>(null)
     val userGpsLocation = _userGpsLocation.asStateFlow()
 
@@ -114,6 +117,7 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             repository.preferencesManager.settingsFlow.collect { settings ->
                 _themeMode.value = settings.themeMode
+                _unitSystem.value = settings.unitSystem
                 _securityConfig.value = BiometricSecurityConfig(
                     requireForRemoteStart = settings.requireBiometricForRemoteStart,
                     requireForDoorUnlock = settings.requireBiometricForDoorUnlock,
@@ -329,6 +333,24 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun setUnitSystem(units: com.example.data.model.UnitSystem) {
+        viewModelScope.launch {
+            repository.preferencesManager.setUnitSystem(units)
+        }
+    }
+
+    fun saveRemoteStartPreferences(durationMinutes: Int, targetTempF: Int, heatedSeats: Boolean = false, rearDefrost: Boolean = false) {
+        viewModelScope.launch {
+            repository.preferencesManager.saveRemoteStartPreferences(durationMinutes, targetTempF, heatedSeats, rearDefrost)
+        }
+    }
+
+    fun saveNotificationPreferences(lowFuel: Boolean, unlockedDoor: Boolean, geofenceBreach: Boolean) {
+        viewModelScope.launch {
+            repository.preferencesManager.setNotificationPreferences(lowFuel, unlockedDoor, geofenceBreach)
+        }
+    }
+
     fun authenticateWithMazdaConnectedServices(
         email: String,
         password: String,
@@ -336,8 +358,24 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
         customBaseUrl: String? = null,
         onComplete: (Boolean, String) -> Unit
     ) {
+        val mode = if (regionCode == "BRIDGE" || !customBaseUrl.isNullOrBlank()) {
+            com.example.data.remote.ConnectionMode.MCS_GATEWAY
+        } else {
+            com.example.data.remote.ConnectionMode.DIRECT_MAZDA
+        }
+        authenticateWithMazdaConnectedServices(email, password, regionCode, customBaseUrl, mode, onComplete)
+    }
+
+    fun authenticateWithMazdaConnectedServices(
+        email: String,
+        password: String,
+        regionCode: String,
+        customBaseUrl: String?,
+        connectionMode: com.example.data.remote.ConnectionMode,
+        onComplete: (Boolean, String) -> Unit
+    ) {
         viewModelScope.launch {
-            val result = repository.authenticateWithMazdaConnectedServices(email, password, regionCode, customBaseUrl)
+            val result = repository.authenticateWithMazdaConnectedServices(email, password, regionCode, customBaseUrl, connectionMode)
             result.fold(
                 onSuccess = { list ->
                     onComplete(true, "Successfully authenticated with Mazda Connected Services. Found ${list.size} vehicle(s).")

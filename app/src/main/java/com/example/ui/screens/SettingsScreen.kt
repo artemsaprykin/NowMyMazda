@@ -17,20 +17,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.Brightness7
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Fingerprint
-import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Password
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -48,6 +46,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -61,8 +60,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.example.data.model.UnitSystem
 import com.example.data.model.VehicleState
-import com.example.ui.components.CloudApiConfigDialog
 import com.example.ui.components.MyMazdaConnectDialog
 import com.example.ui.theme.AppTheme
 import com.example.ui.theme.DiagnosticAmber
@@ -81,6 +80,9 @@ fun SettingsScreen(
     securityConfig: BiometricSecurityConfig,
     currentTheme: ThemeMode,
     onThemeChange: (ThemeMode) -> Unit,
+    onUnitSystemChange: (UnitSystem) -> Unit = {},
+    onSaveRemoteStartPreferences: (durationMinutes: Int, targetTempF: Int, heatedSeats: Boolean, rearDefrost: Boolean) -> Unit = { _, _, _, _ -> },
+    onSaveNotificationPreferences: (lowFuel: Boolean, unlockedDoor: Boolean, geofenceBreach: Boolean) -> Unit = { _, _, _ -> },
     onLinkMyMazda: (email: String, vin: String, region: String) -> Unit,
     onPairInCarCode: (code: String) -> Unit,
     onUpdateSecurityConfig: (BiometricSecurityConfig) -> Unit,
@@ -88,12 +90,31 @@ fun SettingsScreen(
     onSyncCloud: () -> Unit,
     onSetUserPin: (String) -> Unit = {},
     onOpenVehicleConnection: () -> Unit = {},
+    onSignOut: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = AppTheme.colors
-    var showCloudDialog by remember { mutableStateOf(false) }
     var showMyMazdaDialog by remember { mutableStateOf(false) }
     var showPinChangeDialog by remember { mutableStateOf(false) }
+
+    // Remote start preferences state
+    var remoteDuration by remember(vehicleState.remoteStart.runDurationMinutes) {
+        mutableIntStateOf(vehicleState.remoteStart.runDurationMinutes)
+    }
+    var remoteTemp by remember(vehicleState.remoteStart.targetTempF) {
+        mutableIntStateOf(vehicleState.remoteStart.targetTempF)
+    }
+    var remoteHeatedSeats by remember(vehicleState.remoteStart.heatedSeatsEnabled) {
+        mutableStateOf(vehicleState.remoteStart.heatedSeatsEnabled)
+    }
+    var remoteRearDefrost by remember(vehicleState.remoteStart.rearDefrostEnabled) {
+        mutableStateOf(vehicleState.remoteStart.rearDefrostEnabled)
+    }
+
+    // Notification preferences state
+    var notifyLowFuel by remember { mutableStateOf(true) }
+    var notifyUnlockedDoor by remember { mutableStateOf(true) }
+    var notifyGeofence by remember { mutableStateOf(true) }
 
     LazyColumn(
         modifier = modifier
@@ -104,19 +125,19 @@ fun SettingsScreen(
         item {
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Security & App Settings",
+                text = "Preferences & Security Settings",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = colors.textPrimary
             )
             Text(
-                text = "Themes, MyMazda account linking, in-car pairing, and biometric authorization.",
+                text = "Appearance, measurement units, climate presets, notifications, and security.",
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.textSecondary
             )
         }
 
-        // Appearance / Theme Section Card
+        // Appearance & Units Card
         item {
             Card(
                 shape = RoundedCornerShape(18.dp),
@@ -140,13 +161,13 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "Appearance Theme",
+                                text = "Appearance & Units",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = colors.textPrimary
                             )
                             Text(
-                                text = "Select your preferred contrast and background style",
+                                text = "Select display theme and measurement units",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = colors.textSecondary
                             )
@@ -155,6 +176,8 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
+                    Text("Theme Mode", style = MaterialTheme.typography.labelSmall, color = colors.textSecondary)
+                    Spacer(modifier = Modifier.height(6.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -178,136 +201,237 @@ fun SettingsScreen(
                             testTag = "theme_option_light"
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text("Measurement Units", style = MaterialTheme.typography.labelSmall, color = colors.textSecondary)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = vehicleState.unitSystem == UnitSystem.IMPERIAL,
+                            onClick = { onUnitSystemChange(UnitSystem.IMPERIAL) },
+                            label = { Text("Imperial (mi, psi, °F)") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = SoulRedPrimary,
+                                selectedLabelColor = Color.White,
+                                containerColor = colors.surfaceElevated,
+                                labelColor = colors.textSecondary
+                            ),
+                            modifier = Modifier.testTag("unit_chip_imperial")
+                        )
+                        FilterChip(
+                            selected = vehicleState.unitSystem == UnitSystem.METRIC,
+                            onClick = { onUnitSystemChange(UnitSystem.METRIC) },
+                            label = { Text("Metric (km, bar, °C)") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = SoulRedPrimary,
+                                selectedLabelColor = Color.White,
+                                containerColor = colors.surfaceElevated,
+                                labelColor = colors.textSecondary
+                            ),
+                            modifier = Modifier.testTag("unit_chip_metric")
+                        )
+                    }
                 }
             }
         }
 
-        // MyMazda Connected Vehicle Account Card
+        // Remote Climate & Engine Start Presets Card (Phase 9)
         item {
-            val isConnected = vehicleState.isConnected && vehicleState.isVehicleSelected
             Card(
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = colors.surface),
                 border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.border)),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("mymazda_account_card")
+                    .testTag("remote_start_settings_card")
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(SoulRedDark),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.Default.DirectionsCar, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = "MyMazda Account & Telematics",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = colors.textPrimary
-                                )
-                                Text(
-                                    text = "Connect vehicle via account credentials or cv/mcs bridge",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = colors.textSecondary
-                                )
-                            }
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isConnected) Color(0xFF142B1F) else Color(0xFF2E2014)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(SoulRedDark.copy(alpha = 0.3f)),
+                            contentAlignment = Alignment.Center
                         ) {
+                            Icon(Icons.Default.AcUnit, contentDescription = null, tint = SoulRedLight, modifier = Modifier.size(20.dp))
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
                             Text(
-                                text = if (isConnected) "Connected" else "Disconnected",
-                                color = if (isConnected) DiagnosticGreen else DiagnosticAmber,
-                                style = MaterialTheme.typography.labelSmall,
+                                text = "Remote Start & Climate Presets",
+                                style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                color = colors.textPrimary
+                            )
+                            Text(
+                                text = "Configures default engine run duration and cabin temperature",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.textSecondary
                             )
                         }
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = colors.surfaceElevated,
-                        modifier = Modifier.fillMaxWidth()
+                    Text("Engine Run Duration", style = MaterialTheme.typography.labelSmall, color = colors.textSecondary)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("Linked Email", color = colors.textSecondary, fontSize = 11.sp)
-                                Text(vehicleState.myMazdaAccount.email.ifBlank { "No Account Linked" }, color = colors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("Active VIN", color = colors.textSecondary, fontSize = 11.sp)
-                                Text(vehicleState.vin.ifBlank { "No Vehicle Selected" }, color = colors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("TCU Modem", color = colors.textSecondary, fontSize = 11.sp)
-                                Text(
-                                    if (vehicleState.myMazdaAccount.isTcuPaired) "Active & Paired (4G LTE)" else "Not Connected",
-                                    color = if (vehicleState.myMazdaAccount.isTcuPaired) DiagnosticGreen else DiagnosticAmber,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 12.sp
+                        listOf(10, 15, 20).forEach { mins ->
+                            FilterChip(
+                                selected = remoteDuration == mins,
+                                onClick = {
+                                    remoteDuration = mins
+                                    onSaveRemoteStartPreferences(mins, remoteTemp, remoteHeatedSeats, remoteRearDefrost)
+                                },
+                                label = { Text("$mins Minutes") },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = SoulRedPrimary,
+                                    selectedLabelColor = Color.White,
+                                    containerColor = colors.surfaceElevated,
+                                    labelColor = colors.textSecondary
                                 )
-                            }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text("Target Cabin Temperature", style = MaterialTheme.typography.labelSmall, color = colors.textSecondary)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(68, 70, 72, 74).forEach { temp ->
+                            FilterChip(
+                                selected = remoteTemp == temp,
+                                onClick = {
+                                    remoteTemp = temp
+                                    onSaveRemoteStartPreferences(remoteDuration, temp, remoteHeatedSeats, remoteRearDefrost)
+                                },
+                                label = { Text("$temp°F") },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = SoulRedPrimary,
+                                    selectedLabelColor = Color.White,
+                                    containerColor = colors.surfaceElevated,
+                                    labelColor = colors.textSecondary
+                                )
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    SettingSwitchRow(
+                        title = "Enable Heated Seats",
+                        subtitle = "Automatically warms driver seat during remote start",
+                        checked = remoteHeatedSeats,
+                        onCheckedChange = {
+                            remoteHeatedSeats = it
+                            onSaveRemoteStartPreferences(remoteDuration, remoteTemp, it, remoteRearDefrost)
+                        },
+                        tag = "switch_heated_seats"
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    SettingSwitchRow(
+                        title = "Enable Rear Window Defrost",
+                        subtitle = "Activates rear defrost grid in cold temperatures",
+                        checked = remoteRearDefrost,
+                        onCheckedChange = {
+                            remoteRearDefrost = it
+                            onSaveRemoteStartPreferences(remoteDuration, remoteTemp, remoteHeatedSeats, it)
+                        },
+                        tag = "switch_rear_defrost"
+                    )
+                }
+            }
+        }
+
+        // Notification Alerts Card (Phase 9)
+        item {
+            Card(
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = colors.surface),
+                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.border)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("notification_settings_card")
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(SoulRedDark.copy(alpha = 0.3f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Notifications, contentDescription = null, tint = SoulRedLight, modifier = Modifier.size(20.dp))
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "Push Notifications & Alerts",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.textPrimary
+                            )
+                            Text(
+                                text = "Manage vehicle security and health notifications",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.textSecondary
+                            )
                         }
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Button(
-                            onClick = onOpenVehicleConnection,
-                            colors = ButtonDefaults.buttonColors(containerColor = SoulRedPrimary),
-                            modifier = Modifier
-                                .weight(1.3f)
-                                .testTag("open_vehicle_connection_btn")
-                        ) {
-                            Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Vehicle Connection", fontSize = 12.sp)
-                        }
+                    SettingSwitchRow(
+                        title = "Low Fuel Warning",
+                        subtitle = "Alerts when fuel drops below 15% capacity",
+                        checked = notifyLowFuel,
+                        onCheckedChange = {
+                            notifyLowFuel = it
+                            onSaveNotificationPreferences(it, notifyUnlockedDoor, notifyGeofence)
+                        },
+                        tag = "switch_notify_fuel"
+                    )
 
-                        Button(
-                            onClick = { showMyMazdaDialog = true },
-                            colors = ButtonDefaults.buttonColors(containerColor = colors.surfaceElevated),
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("how_to_connect_btn")
-                        ) {
-                            Icon(Icons.Default.HelpOutline, contentDescription = null, tint = colors.textPrimary, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Fast Dialog", color = colors.textPrimary, fontSize = 12.sp)
-                        }
-                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    SettingSwitchRow(
+                        title = "Unlocked Doors Alert",
+                        subtitle = "Sends alert if vehicle remains unlocked after parking",
+                        checked = notifyUnlockedDoor,
+                        onCheckedChange = {
+                            notifyUnlockedDoor = it
+                            onSaveNotificationPreferences(notifyLowFuel, it, notifyGeofence)
+                        },
+                        tag = "switch_notify_unlocked"
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    SettingSwitchRow(
+                        title = "Geofence Perimeter Breach",
+                        subtitle = "Urgent alert if vehicle leaves designated safe zone",
+                        checked = notifyGeofence,
+                        onCheckedChange = {
+                            notifyGeofence = it
+                            onSaveNotificationPreferences(notifyLowFuel, notifyUnlockedDoor, it)
+                        },
+                        tag = "switch_notify_geofence"
+                    )
                 }
             }
         }
@@ -406,36 +530,131 @@ fun SettingsScreen(
             }
         }
 
-        // Vehicle Profile Summary
+        // MyMazda Connected Vehicle Account Card
         item {
+            val isConnected = vehicleState.isConnected && vehicleState.isVehicleSelected
             Card(
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = colors.surface),
                 border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.border)),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("mymazda_account_card")
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.DirectionsCar, contentDescription = null, tint = SoulRedLight, modifier = Modifier.size(22.dp))
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "Vehicle Information",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = colors.textPrimary
-                        )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(SoulRedDark),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.DirectionsCar, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "MyMazda Account & Telematics",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.textPrimary
+                                )
+                                Text(
+                                    text = "Connected via ${vehicleState.myMazdaAccount.region}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colors.textSecondary
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isConnected) Color(0xFF142B1F) else Color(0xFF2E2014)
+                        ) {
+                            Text(
+                                text = if (isConnected) "Connected" else "Disconnected",
+                                color = if (isConnected) DiagnosticGreen else DiagnosticAmber,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    VehicleInfoRow(
-                        label = "Model",
-                        value = if (vehicleState.isVehicleSelected) "${if (vehicleState.year > 0) vehicleState.year else ""} ${vehicleState.modelName}" else "No Vehicle Selected"
-                    )
-                    VehicleInfoRow(label = "VIN", value = vehicleState.vin.ifBlank { "Not Connected" })
-                    VehicleInfoRow(label = "Nickname", value = vehicleState.nickname.ifBlank { "Not Set" })
-                    VehicleInfoRow(label = "Odometer", value = if (vehicleState.isOdometerAvailable) "${vehicleState.odometerMiles} miles" else "Unavailable")
-                    VehicleInfoRow(label = "Connection", value = if (vehicleState.isConnected) vehicleState.myMazdaAccount.region else "Disconnected")
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = colors.surfaceElevated,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Linked Email", color = colors.textSecondary, fontSize = 11.sp)
+                                Text(vehicleState.myMazdaAccount.email.ifBlank { "No Account Linked" }, color = colors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Active VIN", color = colors.textSecondary, fontSize = 11.sp)
+                                Text(vehicleState.vin.ifBlank { "No Vehicle Selected" }, color = colors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("TCU Modem", color = colors.textSecondary, fontSize = 11.sp)
+                                Text(
+                                    if (vehicleState.myMazdaAccount.isTcuPaired) "Active & Paired" else "Not Connected",
+                                    color = if (vehicleState.myMazdaAccount.isTcuPaired) DiagnosticGreen else DiagnosticAmber,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = onOpenVehicleConnection,
+                            colors = ButtonDefaults.buttonColors(containerColor = SoulRedPrimary),
+                            modifier = Modifier
+                                .weight(1.3f)
+                                .testTag("open_vehicle_connection_btn")
+                        ) {
+                            Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Vehicle Connection", fontSize = 12.sp)
+                        }
+
+                        if (vehicleState.myMazdaAccount.isLinked) {
+                            OutlinedButton(
+                                onClick = onSignOut,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("sign_out_account_btn")
+                            ) {
+                                Text("Sign Out", fontSize = 12.sp, color = DiagnosticAmber)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -513,8 +732,8 @@ fun ThemeOptionTile(
                 }
             }
             Spacer(modifier = Modifier.height(10.dp))
-            Text(title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = colors.textPrimary)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, fontSize = 11.sp, color = colors.textSecondary)
+            Text(text = title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = colors.textPrimary)
+            Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, fontSize = 11.sp)
         }
     }
 }
@@ -525,10 +744,9 @@ fun SettingSwitchRow(
     subtitle: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    tag: String
+    tag: String = ""
 ) {
     val colors = AppTheme.colors
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -537,8 +755,17 @@ fun SettingSwitchRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = colors.textPrimary)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, fontSize = 11.sp)
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.textPrimary
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textSecondary
+            )
         }
         Spacer(modifier = Modifier.width(12.dp))
         Switch(
@@ -555,29 +782,14 @@ fun SettingSwitchRow(
 }
 
 @Composable
-fun VehicleInfoRow(label: String, value: String) {
-    val colors = AppTheme.colors
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(label, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
-        Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = colors.textPrimary)
-    }
-}
-
-@Composable
 fun ChangePinDialog(
     onSavePin: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val colors = AppTheme.colors
-    var newPin by remember { mutableStateOf("") }
-    var confirmPin by remember { mutableStateOf("") }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var pinValue by remember { mutableStateOf("") }
+    var pinConfirmValue by remember { mutableStateOf("") }
+    var errorText by remember { mutableStateOf<String?>(null) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -587,6 +799,7 @@ fun ChangePinDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(8.dp)
+                .testTag("change_pin_dialog")
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Text(
@@ -595,79 +808,75 @@ fun ChangePinDialog(
                     fontWeight = FontWeight.Bold,
                     color = colors.textPrimary
                 )
+
                 Text(
-                    text = "This PIN is salted and hashed using SHA-256 and stored in secure DataStore.",
+                    text = "This PIN serves as a backup authorization mechanism for remote engine start and door unlock operations.",
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.textSecondary,
-                    modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
+                    modifier = Modifier.padding(top = 4.dp, bottom = 14.dp)
                 )
 
                 OutlinedTextField(
-                    value = newPin,
-                    onValueChange = { if (it.length <= 4 && it.all { char -> char.isDigit() }) newPin = it },
-                    label = { Text("New 4-Digit PIN") },
+                    value = pinValue,
+                    onValueChange = { if (it.length <= 4 && it.all { char -> char.isDigit() }) pinValue = it },
+                    label = { Text("Enter 4-Digit PIN") },
                     visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = colors.textPrimary,
-                        unfocusedTextColor = colors.textPrimary,
                         focusedBorderColor = SoulRedPrimary,
-                        unfocusedBorderColor = colors.border
+                        unfocusedBorderColor = colors.border,
+                        focusedTextColor = colors.textPrimary,
+                        unfocusedTextColor = colors.textPrimary
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().testTag("new_pin_input")
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
 
                 OutlinedTextField(
-                    value = confirmPin,
-                    onValueChange = { if (it.length <= 4 && it.all { char -> char.isDigit() }) confirmPin = it },
+                    value = pinConfirmValue,
+                    onValueChange = { if (it.length <= 4 && it.all { char -> char.isDigit() }) pinConfirmValue = it },
                     label = { Text("Confirm 4-Digit PIN") },
                     visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = colors.textPrimary,
-                        unfocusedTextColor = colors.textPrimary,
                         focusedBorderColor = SoulRedPrimary,
-                        unfocusedBorderColor = colors.border
+                        unfocusedBorderColor = colors.border,
+                        focusedTextColor = colors.textPrimary,
+                        unfocusedTextColor = colors.textPrimary
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().testTag("confirm_pin_input")
                 )
 
-                if (errorMessage != null) {
-                    Text(
-                        text = errorMessage ?: "",
-                        color = DiagnosticRed,
-                        fontSize = 11.sp,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
+                errorText?.let { err ->
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(text = err, color = DiagnosticRed, fontSize = 11.sp)
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                Button(
-                    onClick = {
-                        if (newPin.length != 4) {
-                            errorMessage = "PIN must be exactly 4 digits."
-                        } else if (newPin != confirmPin) {
-                            errorMessage = "PINs do not match. Please re-enter."
-                        } else {
-                            errorMessage = null
-                            onSavePin(newPin)
-                        }
-                    },
-                    enabled = newPin.length == 4 && confirmPin.length == 4,
-                    colors = ButtonDefaults.buttonColors(containerColor = SoulRedPrimary),
-                    modifier = Modifier.fillMaxWidth()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Save PIN Securely")
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Cancel", color = colors.textPrimary)
+                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+                        Text("Cancel", color = colors.textSecondary)
+                    }
+                    Button(
+                        onClick = {
+                            if (pinValue.length != 4) {
+                                errorText = "PIN must be exactly 4 digits."
+                            } else if (pinValue != pinConfirmValue) {
+                                errorText = "PIN entries do not match."
+                            } else {
+                                onSavePin(pinValue)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = SoulRedPrimary),
+                        modifier = Modifier.weight(1f).testTag("save_pin_submit_btn")
+                    ) {
+                        Text("Save PIN")
+                    }
                 }
             }
         }

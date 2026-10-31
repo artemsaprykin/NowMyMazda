@@ -197,6 +197,26 @@ fun DashboardScreen(
 
         // Live Command Execution State Card
         when (val cmdState = vehicleState.commandExecutionState) {
+            CommandExecutionState.Idle -> {}
+            is CommandExecutionState.Submitting -> {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF141F2B)),
+                        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(ElectricCyan)),
+                        modifier = Modifier.fillMaxWidth().testTag("command_submitting_card")
+                    ) {
+                        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = ElectricCyan)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("${cmdState.action} - Submitting", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = ElectricCyan)
+                                Text(cmdState.message, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
             is CommandExecutionState.Pending -> {
                 item {
                     Card(
@@ -273,7 +293,63 @@ fun DashboardScreen(
                     }
                 }
             }
-            CommandExecutionState.Idle -> {}
+            is CommandExecutionState.TimedOut -> {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF3B2A15)),
+                        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(DiagnosticAmber)),
+                        modifier = Modifier.fillMaxWidth().testTag("command_timed_out_card")
+                    ) {
+                        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Warning, contentDescription = null, tint = DiagnosticAmber, modifier = Modifier.size(22.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("${cmdState.action} Timed Out", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                                Text(cmdState.errorMessage, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+            is CommandExecutionState.UnknownOutcome -> {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF3B2A15)),
+                        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(DiagnosticAmber)),
+                        modifier = Modifier.fillMaxWidth().testTag("command_unknown_card")
+                    ) {
+                        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Warning, contentDescription = null, tint = DiagnosticAmber, modifier = Modifier.size(22.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("${cmdState.action} - Outcome Unconfirmed", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                                Text(cmdState.message, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+            is CommandExecutionState.Unsupported -> {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF2B2215)),
+                        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(DiagnosticAmber)),
+                        modifier = Modifier.fillMaxWidth().testTag("command_unsupported_card")
+                    ) {
+                        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Warning, contentDescription = null, tint = DiagnosticAmber, modifier = Modifier.size(22.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("${cmdState.action} Unsupported", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                                Text(cmdState.reason, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         // Welcome / Connect Vehicle Banner if no vehicle connected

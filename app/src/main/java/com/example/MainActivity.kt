@@ -389,13 +389,21 @@ fun MainAppScreen(
                     securityConfig = securityConfig,
                     currentTheme = currentTheme,
                     onThemeChange = { viewModel.setThemeMode(it) },
+                    onUnitSystemChange = { viewModel.setUnitSystem(it) },
+                    onSaveRemoteStartPreferences = { dur, temp, seats, defrost ->
+                        viewModel.saveRemoteStartPreferences(dur, temp, seats, defrost)
+                    },
+                    onSaveNotificationPreferences = { fuel, unlock, geo ->
+                        viewModel.saveNotificationPreferences(fuel, unlock, geo)
+                    },
                     onLinkMyMazda = { _, _, _ -> viewModel.selectTab(VehicleNavTab.CONNECTION) },
                     onPairInCarCode = { },
                     onUpdateSecurityConfig = { cfg -> viewModel.updateSecurityConfig(cfg) },
                     onSaveCloudConfig = { url, token -> viewModel.updateCloudConfig(url, token) },
                     onSyncCloud = { viewModel.syncCloudApi() },
                     onSetUserPin = { pin -> viewModel.setUserPin(pin) },
-                    onOpenVehicleConnection = { viewModel.selectTab(VehicleNavTab.CONNECTION) }
+                    onOpenVehicleConnection = { viewModel.selectTab(VehicleNavTab.CONNECTION) },
+                    onSignOut = { viewModel.disconnectMazdaAccount() }
                 )
 
                 VehicleNavTab.CONNECTION -> {

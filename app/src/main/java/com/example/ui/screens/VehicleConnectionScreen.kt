@@ -17,7 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDone
@@ -124,7 +124,7 @@ fun VehicleConnectionScreen(
                     modifier = Modifier.testTag("vehicle_conn_back_btn")
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ArrowBack,
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
                         tint = colors.textPrimary
                     )
@@ -316,15 +316,19 @@ fun VehicleConnectionScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         MazdaRegionalCluster.entries.forEach { cluster ->
+                            val chipLabel = when (cluster) {
+                                MazdaRegionalCluster.MNAO -> "MNAO (Verified)"
+                                MazdaRegionalCluster.MME -> "MME (Unverified)"
+                                MazdaRegionalCluster.MJO -> "MJO (Unverified)"
+                                MazdaRegionalCluster.CV_MCS_BRIDGE -> "Gateway"
+                            }
                             FilterChip(
                                 selected = selectedRegion == cluster,
                                 onClick = {
                                     selectedRegion = cluster
-                                    if (cluster == MazdaRegionalCluster.CV_MCS_BRIDGE) {
-                                        useCustomGateway = true
-                                    }
+                                    useCustomGateway = (cluster == MazdaRegionalCluster.CV_MCS_BRIDGE)
                                 },
-                                label = { Text(cluster.code, fontSize = 11.sp) },
+                                label = { Text(chipLabel, fontSize = 10.sp) },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = SoulRedPrimary,
                                     selectedLabelColor = Color.White,
@@ -405,7 +409,7 @@ fun VehicleConnectionScreen(
                             value = customGatewayUrl,
                             onValueChange = { customGatewayUrl = it },
                             label = { Text("Custom Gateway / cv/mcs Daemon URL") },
-                            placeholder = { Text("http://10.0.2.2:8080/api/") },
+                            placeholder = { Text("http://10.0.2.2:8080/") },
                             singleLine = true,
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = colors.textPrimary,
