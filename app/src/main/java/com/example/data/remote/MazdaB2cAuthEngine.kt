@@ -111,12 +111,12 @@ class MazdaB2cAuthEngine(
     )
 
     data class B2cTokenResult(
-        @Json(name = "access_token") val accessToken: String,
-        @Json(name = "refresh_token") val refreshToken: String? = null,
-        @Json(name = "id_token") val idToken: String? = null,
-        @Json(name = "token_type") val tokenType: String = "Bearer",
-        @Json(name = "expires_in") val expiresInSeconds: Long,
-        @Json(name = "scope") val scope: String? = null
+        @param:Json(name = "access_token") val accessToken: String,
+        @param:Json(name = "refresh_token") val refreshToken: String? = null,
+        @param:Json(name = "id_token") val idToken: String? = null,
+        @param:Json(name = "token_type") val tokenType: String = "Bearer",
+        @param:Json(name = "expires_in") val expiresInSeconds: Long,
+        @param:Json(name = "scope") val scope: String? = null
     )
 
     data class DeviceSessionBinding(

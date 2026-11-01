@@ -176,20 +176,20 @@ data class MazdaVehicleStatusPayload(
 )
 
 data class MazdaDoorStatusPayload(
-    @Json(name = "driverDoorOpen") val driverDoorOpen: Boolean? = null,
-    @Json(name = "passengerDoorOpen") val passengerDoorOpen: Boolean? = null,
-    @Json(name = "rearLeftDoorOpen") val rearLeftDoorOpen: Boolean? = null,
-    @Json(name = "rearRightDoorOpen") val rearRightDoorOpen: Boolean? = null,
-    @Json(name = "trunkOpen") val trunkOpen: Boolean? = null,
-    @Json(name = "hoodOpen") val hoodOpen: Boolean? = null,
-    @Json(name = "windowsOpen") val windowsOpen: Boolean? = null
+    @param:Json(name = "driverDoorOpen") val driverDoorOpen: Boolean? = null,
+    @param:Json(name = "passengerDoorOpen") val passengerDoorOpen: Boolean? = null,
+    @param:Json(name = "rearLeftDoorOpen") val rearLeftDoorOpen: Boolean? = null,
+    @param:Json(name = "rearRightDoorOpen") val rearRightDoorOpen: Boolean? = null,
+    @param:Json(name = "trunkOpen") val trunkOpen: Boolean? = null,
+    @param:Json(name = "hoodOpen") val hoodOpen: Boolean? = null,
+    @param:Json(name = "windowsOpen") val windowsOpen: Boolean? = null
 )
 
 data class MazdaTpmsPayload(
-    @Json(name = "flPressurePsi") val flPressurePsi: Double? = null,
-    @Json(name = "frPressurePsi") val frPressurePsi: Double? = null,
-    @Json(name = "rlPressurePsi") val rlPressurePsi: Double? = null,
-    @Json(name = "rrPressurePsi") val rrPressurePsi: Double? = null
+    @param:Json(name = "flPressurePsi") val flPressurePsi: Double? = null,
+    @param:Json(name = "frPressurePsi") val frPressurePsi: Double? = null,
+    @param:Json(name = "rlPressurePsi") val rlPressurePsi: Double? = null,
+    @param:Json(name = "rrPressurePsi") val rrPressurePsi: Double? = null
 )
 
 data class MazdaRemoteControlRequestPayload(

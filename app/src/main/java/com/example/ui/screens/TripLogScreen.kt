@@ -31,7 +31,7 @@ import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Timer
@@ -260,7 +260,7 @@ fun TripLogScreen(
                             .height(52.dp)
                             .testTag("trip_sort_button")
                     ) {
-                        Icon(Icons.Default.Sort, contentDescription = "Sort", tint = colors.textPrimary, modifier = Modifier.size(18.dp))
+                        Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort", tint = colors.textPrimary, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Sort", color = colors.textPrimary, fontSize = 12.sp)
                     }

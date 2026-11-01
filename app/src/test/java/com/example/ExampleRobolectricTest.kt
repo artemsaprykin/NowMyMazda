@@ -316,7 +316,7 @@ class ExampleRobolectricTest {
     val failed = CommandExecutionState.Failed("LOCK_DOORS", "Engine is running; lock refused")
     val unsupported = CommandExecutionState.Unsupported("VENTILATE_SEATS", "Capability not supported by vehicle")
 
-    assertTrue(idle is CommandExecutionState.Idle)
+    assertEquals(CommandExecutionState.Idle, idle)
     assertEquals("LOCK_DOORS", submitting.action)
     assertEquals("cmd_999", accepted.commandId)
     assertEquals("LOCK_DOORS", pending.action)
