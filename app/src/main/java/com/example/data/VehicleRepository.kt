@@ -312,15 +312,23 @@ class VehicleRepository(
 
                 val activeVehicle = discoveredList.firstOrNull()
 
-                // Save session without fake tokens
-                sessionManager.saveAuthenticatedSession(
-                    accessToken = "mcs_daemon_session_${System.currentTimeMillis()}",
-                    refreshToken = null,
-                    idToken = null,
-                    expiresInSeconds = gatewaySession.tokenExpiresAt?.let { (it - System.currentTimeMillis()) / 1000L }?.coerceAtLeast(3600L) ?: 3600L,
-                    customerId = gatewaySession.customerId ?: email,
-                    region = region.code
-                )
+                // STRICT Section 3.1: Do not generate fake gateway tokens ("mcs_daemon_session_...").
+                // If the gateway exposes an actual session token, store it; otherwise session state is managed upstream by the daemon.
+                val actualToken = gatewaySession.sessionToken
+                if (!actualToken.isNullOrBlank()) {
+                    val expiresInSec = gatewaySession.tokenExpiresAt?.let { expiresAt ->
+                        val diff = (expiresAt - System.currentTimeMillis()) / 1000L
+                        if (diff > 0) diff else 0L
+                    } ?: 0L
+                    sessionManager.saveAuthenticatedSession(
+                        accessToken = actualToken,
+                        refreshToken = null,
+                        idToken = null,
+                        expiresInSeconds = expiresInSec,
+                        customerId = gatewaySession.customerId ?: email,
+                        region = region.code
+                    )
+                }
 
                 preferencesManager.saveAccountSettings(email, region.code, gatewayUrl, ConnectionMode.MCS_GATEWAY)
                 if (activeVehicle != null) {
@@ -338,7 +346,7 @@ class VehicleRepository(
                     isVehicleSelected = activeVehicle != null,
                     isConnected = activeVehicle != null,
                     connectionState = finalState,
-                    remoteControlEnabled = activeVehicle?.canRemoteControl == true,
+                    remoteControlEnabled = false, // STRICT Section 7: Locked in production pending verified live vehicle protocol authorization
                     cloudConfig = CloudApiConfig(
                         isConnected = activeVehicle != null,
                         connectionState = finalState,
@@ -650,8 +658,22 @@ class VehicleRepository(
             } else {
                 val region = MazdaRegionalCluster.fromCode(_vehicleState.value.myMazdaAccount.regionCode)
                 val b2cEngine = MazdaB2cAuthEngine(region)
-                val token = sessionManager.getValidAccessToken(b2cEngine)
 
+                // STRICT Section 3.3: Do NOT construct a Retrofit client and print "Direct Handshake OK" without real network verification
+                val regCheck = b2cEngine.checkClientRegistrationSupport(context.packageName)
+                if (regCheck.isFailure) {
+                    val latency = System.currentTimeMillis() - start
+                    val errorMsg = regCheck.exceptionOrNull()?.message ?: "Direct Mazda authentication is blocked by client registration boundary."
+                    _vehicleState.value = _vehicleState.value.copy(
+                        cloudConfig = _vehicleState.value.cloudConfig.copy(
+                            lastLatencyMs = latency,
+                            lastErrorMessage = errorMsg
+                        )
+                    )
+                    return@withContext "Direct Mazda Handshake Blocked: $errorMsg"
+                }
+
+                val token = sessionManager.getValidAccessToken(b2cEngine)
                 if (token.isNullOrBlank()) {
                     val latency = System.currentTimeMillis() - start
                     _vehicleState.value = _vehicleState.value.copy(
@@ -667,9 +689,26 @@ class VehicleRepository(
                     return@withContext "Handshake Failed: Valid access token unavailable. Please sign in."
                 }
 
-                // Authenticated handshake check with MNAO direct API
                 val directApi = MazdaDirectApiClient.create(region.primaryBaseUrl)
                 val latency = System.currentTimeMillis() - start
+                // Authenticated read-only check
+                val resultMsg = try {
+                    val res = directApi.getVehicleList(
+                        authorization = "Bearer $token",
+                        deviceId = sessionManager.getStoredSession()?.deviceId ?: "nowmymazda_android",
+                        request = MazdaApiEnvelope(
+                            header = MazdaApiHeaderDto(deviceId = sessionManager.getStoredSession()?.deviceId ?: "nowmymazda_android"),
+                            body = MazdaVehicleListRequest(customerId = _vehicleState.value.myMazdaAccount.email)
+                        )
+                    )
+                    if (res.isSuccessful) {
+                        "Mazda Direct Handshake OK: Vehicle endpoint confirmed active (${latency}ms)."
+                    } else {
+                        "Mazda Direct Handshake Rejected: Endpoint returned HTTP ${res.code()} (${latency}ms)."
+                    }
+                } catch (e: Exception) {
+                    "Mazda Direct Handshake Failed (${latency}ms): ${e.localizedMessage ?: "Connection error"}"
+                }
 
                 _vehicleState.value = _vehicleState.value.copy(
                     cloudConfig = _vehicleState.value.cloudConfig.copy(
@@ -679,7 +718,7 @@ class VehicleRepository(
                     )
                 )
 
-                "Mazda Direct Handshake OK: Valid authenticated device session active (${latency}ms)."
+                resultMsg
             }
         } catch (e: Exception) {
             val latency = System.currentTimeMillis() - start
@@ -701,15 +740,15 @@ class VehicleRepository(
     // ----------------- Real Remote Commands -----------------
 
     fun remoteStartEngine(durationMinutes: Int, climateTempF: Int) {
-        if (!_vehicleState.value.isVehicleSelected || _vehicleState.value.vin.isBlank()) {
-            NotificationHelper.sendAlert(context, 101, "Command Rejected", "No Mazda vehicle is currently selected.")
+        if (!_vehicleState.value.remoteControlEnabled) {
+            _vehicleState.value = _vehicleState.value.copy(
+                commandExecutionState = CommandExecutionState.Unsupported("Remote Engine Start", "Remote commands locked in production until authenticated read-only communication is confirmed.")
+            )
             return
         }
 
-        if (!_vehicleState.value.remoteControlEnabled) {
-            _vehicleState.value = _vehicleState.value.copy(
-                commandExecutionState = CommandExecutionState.Unsupported("Remote Engine Start", "Remote control is disabled until authenticated read-only communication is confirmed.")
-            )
+        if (!_vehicleState.value.isVehicleSelected || _vehicleState.value.vin.isBlank()) {
+            NotificationHelper.sendAlert(context, 101, "Command Rejected", "No Mazda vehicle is currently selected.")
             return
         }
 
@@ -753,14 +792,14 @@ class VehicleRepository(
     }
 
     fun requestStopEngine() {
-        if (!_vehicleState.value.isVehicleSelected || _vehicleState.value.vin.isBlank()) return
-
         if (!_vehicleState.value.remoteControlEnabled) {
             _vehicleState.value = _vehicleState.value.copy(
-                commandExecutionState = CommandExecutionState.Unsupported("Engine Stop", "Remote commands disabled until read-only communication is confirmed.")
+                commandExecutionState = CommandExecutionState.Unsupported("Engine Stop", "Remote commands locked in production until authenticated read-only communication is confirmed.")
             )
             return
         }
+
+        if (!_vehicleState.value.isVehicleSelected || _vehicleState.value.vin.isBlank()) return
 
         _vehicleState.value = _vehicleState.value.copy(
             commandExecutionState = CommandExecutionState.Submitting("Engine Stop")
@@ -797,14 +836,14 @@ class VehicleRepository(
     }
 
     fun requestDoorLock() {
-        if (!_vehicleState.value.isVehicleSelected || _vehicleState.value.vin.isBlank()) return
-
         if (!_vehicleState.value.remoteControlEnabled) {
             _vehicleState.value = _vehicleState.value.copy(
-                commandExecutionState = CommandExecutionState.Unsupported("Door Lock", "Remote commands disabled until read-only communication is confirmed.")
+                commandExecutionState = CommandExecutionState.Unsupported("Door Lock", "Remote commands locked in production until authenticated read-only communication is confirmed.")
             )
             return
         }
+
+        if (!_vehicleState.value.isVehicleSelected || _vehicleState.value.vin.isBlank()) return
 
         _vehicleState.value = _vehicleState.value.copy(
             commandExecutionState = CommandExecutionState.Submitting("Door Lock")
@@ -841,14 +880,14 @@ class VehicleRepository(
     }
 
     fun requestDoorUnlock() {
-        if (!_vehicleState.value.isVehicleSelected || _vehicleState.value.vin.isBlank()) return
-
         if (!_vehicleState.value.remoteControlEnabled) {
             _vehicleState.value = _vehicleState.value.copy(
-                commandExecutionState = CommandExecutionState.Unsupported("Door Unlock", "Remote commands disabled until read-only communication is confirmed.")
+                commandExecutionState = CommandExecutionState.Unsupported("Door Unlock", "Remote commands locked in production until authenticated read-only communication is confirmed.")
             )
             return
         }
+
+        if (!_vehicleState.value.isVehicleSelected || _vehicleState.value.vin.isBlank()) return
 
         _vehicleState.value = _vehicleState.value.copy(
             commandExecutionState = CommandExecutionState.Submitting("Door Unlock")
@@ -885,14 +924,14 @@ class VehicleRepository(
     }
 
     fun toggleHazardLights() {
-        if (!_vehicleState.value.isVehicleSelected || _vehicleState.value.vin.isBlank()) return
-
         if (!_vehicleState.value.remoteControlEnabled) {
             _vehicleState.value = _vehicleState.value.copy(
-                commandExecutionState = CommandExecutionState.Unsupported("Hazard Lights", "Remote commands disabled until read-only communication is confirmed.")
+                commandExecutionState = CommandExecutionState.Unsupported("Hazard Lights", "Remote commands locked in production until authenticated read-only communication is confirmed.")
             )
             return
         }
+
+        if (!_vehicleState.value.isVehicleSelected || _vehicleState.value.vin.isBlank()) return
 
         val turnOn = !_vehicleState.value.hazardLightsActive
         val actionName = if (turnOn) "LIGHT_ON" else "LIGHT_OFF"
@@ -934,10 +973,17 @@ class VehicleRepository(
         action: String,
         durationMinutes: Int? = null,
         tempF: Int? = null
-    ): Result<String> = withContext(Dispatchers.IO) {
+    ): Result<String?> = withContext(Dispatchers.IO) {
         val vin = _vehicleState.value.vin
         if (vin.isBlank()) {
             return@withContext Result.failure(Exception("No active vehicle selected."))
+        }
+
+        // STRICT Section 7: Disable production execution of all remote vehicle commands until verified
+        if (!_vehicleState.value.remoteControlEnabled) {
+            return@withContext Result.failure(
+                IllegalStateException("Remote vehicle commands are locked in production pending verified live vehicle protocol authorization.")
+            )
         }
 
         val isGateway = _vehicleState.value.cloudConfig.isGatewayAdapter
@@ -959,13 +1005,9 @@ class VehicleRepository(
                 val latency = System.currentTimeMillis() - startTime
                 if (response.isSuccessful && response.body() != null) {
                     val body = response.body()!!
-                    val cmdId = body.commandId
-                    if (!cmdId.isNullOrBlank()) {
-                        Result.success(cmdId)
-                    } else {
-                        // Strict: Do NOT invent cmd_${...} when server omits it!
-                        Result.success("accepted_${System.currentTimeMillis()}")
-                    }
+                    val cmdId = body.commandId?.ifBlank { null }
+                    // STRICT Section 3.2: Never invent artificial command IDs like accepted_${...}
+                    Result.success(cmdId)
                 } else {
                     Result.failure(Exception("Gateway rejected command: HTTP ${response.code()}"))
                 }
@@ -1010,12 +1052,9 @@ class VehicleRepository(
 
                 if (response.isSuccessful) {
                     val body = response.body()
-                    val cmdId = body?.commandId
-                    if (!cmdId.isNullOrBlank()) {
-                        Result.success(cmdId)
-                    } else {
-                        Result.success("accepted_${System.currentTimeMillis()}")
-                    }
+                    val cmdId = body?.commandId?.ifBlank { null }
+                    // STRICT Section 3.2: Never invent artificial command IDs like accepted_${...}
+                    Result.success(cmdId)
                 } else {
                     val errorMsg = when (code) {
                         401 -> "Session expired. Please reconnect your Mazda account."
@@ -1046,13 +1085,17 @@ class VehicleRepository(
         actionName: String,
         successMsg: String
     ) {
+        val dispatchTimestamp = System.currentTimeMillis()
         commandPollingJob?.cancel()
         commandPollingJob = scope.launch {
             delay(4000)
             var attempts = 0
             while (attempts < 3) {
-                syncWithCloudApi()
-                if (expectedCondition(_vehicleState.value)) {
+                val syncSuccess = syncWithCloudApi()
+                // STRICT Section 7: A failed status synchronization cannot confirm an operation using old data!
+                // Only confirm if sync succeeded and telematics report timestamp is at or after command dispatch.
+                val reportTime = _vehicleState.value.lastReportTimestamp ?: 0L
+                if (syncSuccess && reportTime >= dispatchTimestamp && expectedCondition(_vehicleState.value)) {
                     _vehicleState.value = _vehicleState.value.copy(
                         commandExecutionState = CommandExecutionState.Confirmed(
                             action = actionName,
@@ -1120,7 +1163,7 @@ class VehicleRepository(
                             isAvailable = true,
                             voltage = dto.batteryVoltage!!,
                             stateOfHealthPercent = dto.batterySoh ?: 0,
-                            stateOfChargePercent = ((dto.batteryVoltage - 11.8) / (12.7 - 11.8) * 100.0).toInt().coerceIn(0, 100),
+                            stateOfChargePercent = dto.batterySoh ?: 0, // STRICT Section 6: No arbitrary fixed-voltage formula
                             alternatorStatus = if (mappedEngine == EngineState.RUNNING) "${dto.batteryVoltage}V (Charging)" else "${dto.batteryVoltage}V (Resting)",
                             healthSummary = if (dto.batteryVoltage >= 12.2) "Voltage Normal" else "Low Voltage Alert"
                         )
@@ -1143,11 +1186,15 @@ class VehicleRepository(
                             latitude = dto.latitude!!,
                             longitude = dto.longitude!!,
                             address = "Vehicle GPS: ${String.format(java.util.Locale.US, "%.4f, %.4f", dto.latitude, dto.longitude)}",
-                            lastUpdatedTimestamp = dto.lastUpdatedTimestamp ?: System.currentTimeMillis(),
+                            lastUpdatedTimestamp = dto.lastUpdatedTimestamp, // STRICT Section 6: Do not replace missing timestamp with System.currentTimeMillis()
                             source = LocationSource.VEHICLE_TCU
                         )
                     } else {
                         _vehicleState.value.location
+                    }
+
+                    if (hasGps) {
+                        evaluateGeofence(updatedLocation)
                     }
 
                     val updatedDiagnostics = if (dto.activeDtcCodes != null) {
@@ -1155,7 +1202,7 @@ class VehicleRepository(
                             isAvailable = true,
                             checkEngineOn = dto.activeDtcCodes.isNotEmpty(),
                             activeDtcCodes = dto.activeDtcCodes,
-                            lastScanTimestamp = System.currentTimeMillis(),
+                            lastScanTimestamp = dto.lastUpdatedTimestamp,
                             scanStatusMessage = if (dto.activeDtcCodes.isEmpty()) "Diagnostic check complete: zero active DTCs" else "Active DTC codes: ${dto.activeDtcCodes.joinToString()}"
                         )
                     } else {
@@ -1181,7 +1228,7 @@ class VehicleRepository(
                         isOdometerAvailable = dto.odometerMiles != null,
                         fuelPercent = dto.fuelLevelPercent ?: _vehicleState.value.fuelPercent,
                         isFuelAvailable = dto.fuelLevelPercent != null,
-                        lastReportTimestamp = dto.lastUpdatedTimestamp ?: System.currentTimeMillis(),
+                        lastReportTimestamp = dto.lastUpdatedTimestamp, // STRICT Section 6: Preserve null when timestamp is missing
                         batteryHealth = updatedBattery,
                         tpms = updatedTpms,
                         location = updatedLocation,
@@ -1254,7 +1301,7 @@ class VehicleRepository(
                             isAvailable = true,
                             voltage = payload.batteryVoltage!!,
                             stateOfHealthPercent = payload.battery12vSoh ?: 0,
-                            stateOfChargePercent = ((payload.batteryVoltage - 11.8) / (12.7 - 11.8) * 100.0).toInt().coerceIn(0, 100),
+                            stateOfChargePercent = payload.battery12vSoh ?: 0, // STRICT Section 6: No arbitrary fixed-voltage formula
                             alternatorStatus = if (mappedEngine == EngineState.RUNNING) "${payload.batteryVoltage}V (Charging)" else "${payload.batteryVoltage}V (Resting)",
                             healthSummary = if (payload.batteryVoltage >= 12.2) "Good Condition" else "Low Voltage Alert"
                         )
@@ -1278,11 +1325,15 @@ class VehicleRepository(
                             latitude = payload.latitude!!,
                             longitude = payload.longitude!!,
                             address = "Vehicle GPS: ${String.format(java.util.Locale.US, "%.4f, %.4f", payload.latitude, payload.longitude)}",
-                            lastUpdatedTimestamp = telematics.reportTimestamp ?: System.currentTimeMillis(),
+                            lastUpdatedTimestamp = telematics.reportTimestamp, // STRICT Section 6: Do not replace missing timestamp with System.currentTimeMillis()
                             source = LocationSource.VEHICLE_TCU
                         )
                     } else {
                         _vehicleState.value.location
+                    }
+
+                    if (hasGps) {
+                        evaluateGeofence(updatedLocation)
                     }
 
                     val updatedDiagnostics = if (payload?.activeDtcCodes != null) {
@@ -1290,7 +1341,7 @@ class VehicleRepository(
                             isAvailable = true,
                             checkEngineOn = payload.activeDtcCodes.isNotEmpty(),
                             activeDtcCodes = payload.activeDtcCodes,
-                            lastScanTimestamp = System.currentTimeMillis(),
+                            lastScanTimestamp = telematics.reportTimestamp,
                             scanStatusMessage = if (payload.activeDtcCodes.isEmpty()) "Diagnostic scan clean: zero active DTCs" else "Active DTC codes detected: ${payload.activeDtcCodes.joinToString()}"
                         )
                     } else {
@@ -1298,19 +1349,19 @@ class VehicleRepository(
                     }
 
                     val doorsPayload = payload?.doors
-                    val updatedDoors = if (doorsPayload != null) {
+                    val updatedDoors = if (doorsPayload != null && (doorsPayload.driverDoorOpen != null || doorsPayload.passengerDoorOpen != null || doorsPayload.trunkOpen != null)) {
                         DoorState(
                             isAvailable = true,
-                            isDriverOpen = doorsPayload.driverDoorOpen == true,
-                            isPassengerOpen = doorsPayload.passengerDoorOpen == true,
-                            isRearLeftOpen = doorsPayload.rearLeftDoorOpen == true,
-                            isRearRightOpen = doorsPayload.rearRightDoorOpen == true,
-                            isTrunkOpen = doorsPayload.trunkOpen == true,
-                            isHoodOpen = doorsPayload.hoodOpen == true,
-                            areWindowsOpen = doorsPayload.windowsOpen == true
+                            isDriverOpen = doorsPayload.driverDoorOpen ?: false,
+                            isPassengerOpen = doorsPayload.passengerDoorOpen ?: false,
+                            isRearLeftOpen = doorsPayload.rearLeftDoorOpen ?: false,
+                            isRearRightOpen = doorsPayload.rearRightDoorOpen ?: false,
+                            isTrunkOpen = doorsPayload.trunkOpen ?: false,
+                            isHoodOpen = doorsPayload.hoodOpen ?: false,
+                            areWindowsOpen = doorsPayload.windowsOpen ?: false
                         )
                     } else {
-                        _vehicleState.value.doors
+                        DoorState(isAvailable = false) // STRICT Section 6: Do not interpret missing door-state values as closed
                     }
 
                     _vehicleState.value = _vehicleState.value.copy(
@@ -1333,7 +1384,7 @@ class VehicleRepository(
                         isOdometerAvailable = payload?.odometerMiles != null,
                         fuelPercent = payload?.fuelRemainingPercent ?: _vehicleState.value.fuelPercent,
                         isFuelAvailable = payload?.fuelRemainingPercent != null,
-                        lastReportTimestamp = telematics.reportTimestamp ?: System.currentTimeMillis(),
+                        lastReportTimestamp = telematics.reportTimestamp, // STRICT Section 6: Preserve null when timestamp is missing
                         batteryHealth = updatedBattery,
                         tpms = updatedTpms,
                         location = updatedLocation,
@@ -1370,24 +1421,13 @@ class VehicleRepository(
 
     // ----------------- Real GPS & Geofence Handling -----------------
 
-    fun updateVehicleLocationFromGps(lat: Double, lng: Double, address: String? = null) {
-        val addr = address ?: "Mobile Device GPS (${String.format(java.util.Locale.US, "%.4f, %.4f", lat, lng)})"
-        _vehicleState.value = _vehicleState.value.copy(
-            location = _vehicleState.value.location.copy(
-                isAvailable = true,
-                latitude = lat,
-                longitude = lng,
-                address = addr,
-                lastUpdatedTimestamp = System.currentTimeMillis(),
-                source = LocationSource.MOBILE_DEVICE
-            )
-        )
-
+    private fun evaluateGeofence(vehicleLocation: VehicleGpsLocation) {
         val geofence = _vehicleState.value.geofence
-        if (geofence.isEnabled && geofence.centerLatitude != 0.0 && geofence.centerLongitude != 0.0) {
+        if (geofence.isEnabled && vehicleLocation.isAvailable && vehicleLocation.source == LocationSource.VEHICLE_TCU &&
+            geofence.centerLatitude != 0.0 && geofence.centerLongitude != 0.0) {
             val dist = LocationHelper.calculateDistanceMeters(
-                lat,
-                lng,
+                vehicleLocation.latitude,
+                vehicleLocation.longitude,
                 geofence.centerLatitude,
                 geofence.centerLongitude
             )
@@ -1409,6 +1449,24 @@ class VehicleRepository(
                 )
             }
         }
+    }
+
+    /**
+     * Updates phone/user location for map viewer.
+     * STRICT Section 6 & 11: Phone GPS must NEVER overwrite vehicle position or trigger vehicle theft alarms!
+     */
+    fun updateVehicleLocationFromGps(lat: Double, lng: Double, address: String? = null) {
+        val addr = address ?: "Mobile Device GPS (${String.format(java.util.Locale.US, "%.4f, %.4f", lat, lng)})"
+        _vehicleState.value = _vehicleState.value.copy(
+            userLocation = VehicleGpsLocation(
+                isAvailable = true,
+                latitude = lat,
+                longitude = lng,
+                address = addr,
+                lastUpdatedTimestamp = System.currentTimeMillis(),
+                source = LocationSource.MOBILE_DEVICE
+            )
+        )
     }
 
     fun updateGeofence(enabled: Boolean, radiusMeters: Int, safeZoneName: String) {
@@ -1520,17 +1578,21 @@ class VehicleRepository(
     }
 
     fun runDtcDiagnosticScan() {
-        scope.launch {
-            executeRemoteCommand("DIAGNOSTIC_SCAN")
-            syncWithCloudApi()
-        }
+        _vehicleState.value = _vehicleState.value.copy(
+            commandExecutionState = CommandExecutionState.Unsupported(
+                action = "DIAGNOSTIC_SCAN",
+                reason = "Diagnostic scan requires a local OBD-II hardware adapter. Cloud-based CAN-bus scanning is not supported by Mazda Connected Services."
+            )
+        )
     }
 
     fun clearDtcCodes() {
-        scope.launch {
-            executeRemoteCommand("CLEAR_DTC")
-            syncWithCloudApi()
-        }
+        _vehicleState.value = _vehicleState.value.copy(
+            commandExecutionState = CommandExecutionState.Unsupported(
+                action = "CLEAR_DTC",
+                reason = "Clearing diagnostic trouble codes requires a local OBD-II hardware adapter. Cloud DTC reset is not supported by Mazda Connected Services."
+            )
+        )
     }
 
     fun updateCloudConfig(apiUrl: String, token: String) {

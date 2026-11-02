@@ -358,7 +358,8 @@ class VehicleViewModel(application: Application) : AndroidViewModel(application)
         customBaseUrl: String? = null,
         onComplete: (Boolean, String) -> Unit
     ) {
-        val mode = if (regionCode == "BRIDGE" || !customBaseUrl.isNullOrBlank()) {
+        // Strict Section 8: Entering a custom URL must not implicitly switch connection mode.
+        val mode = if (regionCode == "BRIDGE") {
             com.example.data.remote.ConnectionMode.MCS_GATEWAY
         } else {
             com.example.data.remote.ConnectionMode.DIRECT_MAZDA

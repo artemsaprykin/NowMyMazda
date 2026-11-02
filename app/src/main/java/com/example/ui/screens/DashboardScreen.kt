@@ -473,7 +473,9 @@ fun DashboardScreen(
 
         // Remote Controls Grid
         item {
-            val isCommandsEnabled = vehicleState.isVehicleSelected && vehicleState.commandExecutionState !is CommandExecutionState.Pending
+            val isCommandsEnabled = vehicleState.isVehicleSelected &&
+                vehicleState.remoteControlEnabled &&
+                vehicleState.commandExecutionState !is CommandExecutionState.Pending
 
             Text(
                 text = "Remote Controls",
@@ -482,6 +484,36 @@ fun DashboardScreen(
                 color = colors.textPrimary
             )
             Spacer(modifier = Modifier.height(10.dp))
+
+            if (!vehicleState.remoteControlEnabled) {
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated),
+                    border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(DiagnosticAmber.copy(alpha = 0.5f))),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = DiagnosticAmber,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Remote commands are locked in production pending verified live vehicle communication and TCU authorization.",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 11.sp,
+                            color = colors.textSecondary
+                        )
+                    }
+                }
+            }
 
             // Remote Engine Start / Stop Master Button
             Card(

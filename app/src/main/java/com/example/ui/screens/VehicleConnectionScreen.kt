@@ -455,7 +455,7 @@ fun VehicleConnectionScreen(
                             onAuthenticate(
                                 emailInput.trim(),
                                 passwordInput,
-                                selectedRegion.code,
+                                if (useCustomGateway) MazdaRegionalCluster.CV_MCS_BRIDGE.code else selectedRegion.code,
                                 if (useCustomGateway) customGatewayUrl.trim() else null
                             ) { success, msg ->
                                 isConnecting = false

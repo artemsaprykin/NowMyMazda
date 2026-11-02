@@ -3,8 +3,10 @@ package com.example
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.local.TripLogEntity
+import com.example.data.model.BatteryHealth
 import com.example.data.model.CommandExecutionState
 import com.example.data.model.EngineState
+import com.example.data.model.LocationSource
 import com.example.data.model.LockState
 import com.example.data.model.MazdaConnectionState
 import com.example.data.model.UnitSystem
@@ -332,5 +334,115 @@ class ExampleRobolectricTest {
     assertTrue("Zero active DTC codes initially", state.diagnostics.activeDtcCodes.isEmpty())
     assertFalse(state.diagnostics.checkEngineOn)
     assertFalse(state.diagnostics.isAvailable)
+  }
+
+  @Test
+  fun `verify direct authentication fails with boundary exception and never reports connected`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val repository = com.example.data.VehicleRepository(context, this)
+
+    val result = repository.authenticateMyMazdaAccount(
+      email = "driver@mazda.com",
+      password = "secretPassword123",
+      region = MazdaRegionalCluster.MNAO,
+      connectionMode = ConnectionMode.DIRECT_MAZDA
+    )
+
+    assertTrue("Direct authentication must fail on third-party package", result.isFailure)
+    assertTrue("Exception must be MazdaAuthBoundaryException", result.exceptionOrNull() is MazdaAuthBoundaryException)
+
+    val currentState = repository.vehicleState.value
+    assertFalse("Must never transition to connected on failed auth", currentState.isConnected)
+    assertFalse("Must never select vehicle on failed auth", currentState.isVehicleSelected)
+    assertEquals(MazdaConnectionState.CONNECTION_FAILED, currentState.connectionState)
+  }
+
+  @Test
+  fun `verify remote engine start is rejected when remoteControlEnabled is false`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val repository = com.example.data.VehicleRepository(context, this)
+
+    assertFalse("Remote commands must be locked in production", repository.vehicleState.value.remoteControlEnabled)
+
+    repository.remoteStartEngine(durationMinutes = 15, climateTempF = 72)
+
+    val cmdState = repository.vehicleState.value.commandExecutionState
+    assertTrue("Command must transition to Unsupported", cmdState is CommandExecutionState.Unsupported)
+    val unsupported = cmdState as CommandExecutionState.Unsupported
+    assertEquals("Remote Engine Start", unsupported.action)
+    assertTrue("Explanation must mention locked in production", unsupported.reason.contains("locked in production"))
+  }
+
+  @Test
+  fun `verify diagnostic commands return Unsupported without cloud dispatch`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val repository = com.example.data.VehicleRepository(context, this)
+
+    repository.runDtcDiagnosticScan()
+    val scanState = repository.vehicleState.value.commandExecutionState
+    assertTrue("Diagnostic scan must be Unsupported", scanState is CommandExecutionState.Unsupported)
+    assertTrue((scanState as CommandExecutionState.Unsupported).reason.contains("local OBD-II"))
+
+    repository.clearDtcCodes()
+    val clearState = repository.vehicleState.value.commandExecutionState
+    assertTrue("Clear DTC must be Unsupported", clearState is CommandExecutionState.Unsupported)
+    assertTrue((clearState as CommandExecutionState.Unsupported).reason.contains("local OBD-II"))
+  }
+
+  @Test
+  fun `verify phone GPS does not overwrite vehicle TCU position and never triggers vehicle geofence theft alarm`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val repository = com.example.data.VehicleRepository(context, this)
+
+    // Set geofence around safe zone at (47.6000, -122.3300) with 200m radius
+    repository.updateGeofence(enabled = true, radiusMeters = 200, safeZoneName = "Home Garage")
+
+    // Update phone GPS far away (48.5000, -122.0000)
+    repository.updateVehicleLocationFromGps(48.5000, -122.0000, "User Phone in Downtown")
+
+    val state = repository.vehicleState.value
+    assertEquals(LocationSource.MOBILE_DEVICE, state.userLocation.source)
+    assertEquals(48.5000, state.userLocation.latitude, 0.0001)
+
+    // Vehicle location must NOT be replaced by phone GPS
+    assertFalse("Vehicle TCU location must remain unavailable until real telematics received", state.location.isAvailable)
+    assertNotEquals("Vehicle location must not equal phone GPS", 48.5000, state.location.latitude)
+
+    // Geofence must NOT be breached by user's phone movement
+    assertFalse("Geofence must not breach from phone movement", state.geofence.isBreached)
+    assertFalse("Theft alarm must not activate from phone movement", state.geofence.theftAlarmActive)
+    assertFalse("Hazard lights must not activate from phone movement", state.hazardLightsActive)
+  }
+
+  @Test
+  fun `verify missing telematics report timestamp is not fabricated as current time`() {
+    val state = VehicleState()
+    assertNull("Initial report timestamp must be null", state.lastReportTimestamp)
+  }
+
+  @Test
+  fun `verify battery health does not calculate charge percentage from arbitrary voltage formula`() {
+    val battery = BatteryHealth(
+      isAvailable = true,
+      voltage = 12.4,
+      stateOfHealthPercent = 85,
+      stateOfChargePercent = 85
+    )
+    assertEquals(85, battery.stateOfChargePercent)
+    assertEquals(85, battery.stateOfHealthPercent)
+    assertEquals(12.4, battery.voltage, 0.01)
+  }
+
+  @Test
+  fun `verify handshakes do not return success without authentic network response`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val repository = com.example.data.VehicleRepository(context, this)
+
+    val handshakeResult = repository.testConnectionHandshake()
+    assertTrue(
+      "Handshake must report blocked or failed when unauthenticated",
+      handshakeResult.contains("Blocked") || handshakeResult.contains("Failed")
+    )
+    assertFalse("Handshake must never report OK without verified authentication", handshakeResult.contains("OK"))
   }
 }

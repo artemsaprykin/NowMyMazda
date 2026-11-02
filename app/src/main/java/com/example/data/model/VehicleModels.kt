@@ -229,6 +229,7 @@ data class VehicleState(
     val diagnostics: DiagnosticStatus = DiagnosticStatus(),
     val remoteStart: RemoteStartSettings = RemoteStartSettings(),
     val location: VehicleGpsLocation = VehicleGpsLocation(),
+    val userLocation: VehicleGpsLocation = VehicleGpsLocation(),
     val geofence: GeofenceSettings = GeofenceSettings(),
     val cloudConfig: CloudApiConfig = CloudApiConfig(),
     val activeDriveSession: ActiveDriveSession? = null,

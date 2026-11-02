@@ -79,6 +79,7 @@ data class McsSessionStatusDto(
     @param:Json(name = "region") val region: String? = null,
     @param:Json(name = "customer_id") val customerId: String? = null,
     @param:Json(name = "token_expires_at") val tokenExpiresAt: Long? = null,
+    @param:Json(name = "session_token") val sessionToken: String? = null,
     @param:Json(name = "vehicle_count") val vehicleCount: Int = 0
 )
 
